@@ -12,5 +12,41 @@ export default async function Home() {
     redirect("/login");
   }
 
-  return <ExpenseTracker />;
+  const [
+    bankAccountsResult,
+    creditCardsResult,
+    expensesResult,
+    depositsResult,
+    loanPaymentsResult,
+    cardPaymentsResult,
+  ] = await Promise.all([
+    supabase.from("bank_accounts").select("*").order("display_order", { ascending: true }),
+    supabase.from("credit_cards").select("*").order("display_order", { ascending: true }),
+    supabase.from("expenses").select("*").order("expense_date", { ascending: false }).order("created_at", { ascending: false }),
+    supabase.from("income_deposits").select("*"),
+    supabase.from("loan_payments").select("*"),
+    supabase.from("credit_card_payments").select("*"),
+  ]);
+
+  const bankAccounts = bankAccountsResult.data || [];
+  const creditCards = creditCardsResult.data || [];
+  const expenses = expensesResult.data || [];
+  const deposits = depositsResult.data || [];
+  const loanPayments = loanPaymentsResult.data || [];
+  const cardPayments = cardPaymentsResult.data || [];
+
+  if (bankAccounts.length === 0) {
+    redirect("/setup");
+  }
+
+  return (
+    <ExpenseTracker
+      bankAccounts={bankAccounts}
+      creditCards={creditCards}
+      expenses={expenses}
+      deposits={deposits}
+      loanPayments={loanPayments}
+      cardPayments={cardPayments}
+    />
+  );
 }
