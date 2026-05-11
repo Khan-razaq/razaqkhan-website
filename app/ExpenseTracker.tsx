@@ -305,6 +305,9 @@ export default function ExpenseTracker({
             <Link href="/payments" className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
               Payments
             </Link>
+            <Link href="/loans" className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
+              Loans
+            </Link>
             <Link href="/setup" className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
               Setup
             </Link>
