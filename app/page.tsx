@@ -19,6 +19,7 @@ export default async function Home() {
     depositsResult,
     loanPaymentsResult,
     cardPaymentsResult,
+    contributionsResult,
   ] = await Promise.all([
     supabase.from("bank_accounts").select("*").order("display_order", { ascending: true }),
     supabase.from("credit_cards").select("*").order("display_order", { ascending: true }),
@@ -26,6 +27,7 @@ export default async function Home() {
     supabase.from("income_deposits").select("*"),
     supabase.from("loan_payments").select("*"),
     supabase.from("credit_card_payments").select("*"),
+    supabase.from("savings_contributions").select("*"),
   ]);
 
   const bankAccounts = bankAccountsResult.data || [];
@@ -34,6 +36,7 @@ export default async function Home() {
   const deposits = depositsResult.data || [];
   const loanPayments = loanPaymentsResult.data || [];
   const cardPayments = cardPaymentsResult.data || [];
+  const contributions = contributionsResult.data || [];
 
   if (bankAccounts.length === 0) {
     redirect("/setup");
@@ -47,6 +50,7 @@ export default async function Home() {
       deposits={deposits}
       loanPayments={loanPayments}
       cardPayments={cardPayments}
+      contributions={contributions}
     />
   );
 }

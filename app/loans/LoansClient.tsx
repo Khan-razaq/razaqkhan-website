@@ -34,12 +34,22 @@ type BankAccount = {
   name: string;
 };
 
-type LoanPayment = {
+type SavingsGoal = {
   id: string;
-  loan_id: string;
+  name: string;
+  target_amount: number;
+  currency: Currency;
+  target_date: string | null;
+  notes: string | null;
+  display_order: number;
+};
+
+type SavingsContribution = {
+  id: string;
+  goal_id: string;
   bank_account_id: string;
   amount: number;
-  payment_date: string;
+  contribution_date: string;
   notes: string | null;
 };
 
@@ -132,11 +142,15 @@ export default function LoansClient({
   loans: initialLoans,
   payments: initialPayments,
   inrToUsdRate,
+  goals: initialGoals,
+  contributions: initialContributions,
 }: {
   bankAccounts: BankAccount[];
   loans: Loan[];
   payments: LoanPayment[];
   inrToUsdRate: number;
+  goals: SavingsGoal[];
+  contributions: SavingsContribution[];
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -148,6 +162,27 @@ export default function LoansClient({
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [paymentLoanId, setPaymentLoanId] = useState<string>("");
   const [error, setError] = useState("");
+  
+  // Goals state
+  const [goals, setGoals] = useState<SavingsGoal[]>(initialGoals);
+  const [contributions, setContributions] = useState<SavingsContribution[]>(initialContributions);
+  const [showGoalForm, setShowGoalForm] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
+  const [showContribForm, setShowContribForm] = useState(false);
+  const [contribGoalId, setContribGoalId] = useState<string>("");
+
+  // Goal form fields
+  const [goalName, setGoalName] = useState("");
+  const [goalTarget, setGoalTarget] = useState("");
+  const [goalCurrency, setGoalCurrency] = useState<Currency>("USD");
+  const [goalTargetDate, setGoalTargetDate] = useState("");
+  const [goalNotes, setGoalNotes] = useState("");
+
+  // Contribution form fields
+  const [contribBankId, setContribBankId] = useState(bankAccounts[0]?.id || "");
+  const [contribAmount, setContribAmount] = useState("");
+  const [contribDate, setContribDate] = useState(new Date().toISOString().split("T")[0]);
+  const [contribNotes, setContribNotes] = useState("");
 
   // Loan form fields
   const [name, setName] = useState("");
@@ -316,6 +351,168 @@ export default function LoansClient({
     router.refresh();
   };
 
+  const resetGoalForm = () => {
+    setGoalName("");
+    setGoalTarget("");
+    setGoalCurrency("USD");
+    setGoalTargetDate("");
+    setGoalNotes("");
+    setEditingGoal(null);
+  };
+
+  const startEditGoal = (goal: SavingsGoal) => {
+    setEditingGoal(goal);
+    setGoalName(goal.name);
+    setGoalTarget(goal.target_amount.toString());
+    setGoalCurrency(goal.currency);
+    setGoalTargetDate(goal.target_date || "");
+    setGoalNotes(goal.notes || "");
+    setShowGoalForm(true);
+  };
+
+  const handleSaveGoal = async () => {
+    setError("");
+
+    if (!goalName.trim()) {
+      setError("Goal name required.");
+      return;
+    }
+    if (!goalTarget || parseFloat(goalTarget) <= 0) {
+      setError("Target amount must be > 0.");
+      return;
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const payload = {
+      user_id: user.id,
+      name: goalName.trim(),
+      target_amount: parseFloat(goalTarget),
+      currency: goalCurrency,
+      target_date: goalTargetDate || null,
+      notes: goalNotes.trim() || null,
+      display_order: goals.length,
+    };
+
+    if (editingGoal) {
+      const { data, error: e } = await supabase
+        .from("savings_goals")
+        .update(payload)
+        .eq("id", editingGoal.id)
+        .select()
+        .single();
+      if (e) {
+        setError(e.message);
+        return;
+      }
+      setGoals(goals.map((g) => (g.id === data.id ? data : g)));
+    } else {
+      const { data, error: e } = await supabase
+        .from("savings_goals")
+        .insert(payload)
+        .select()
+        .single();
+      if (e) {
+        setError(e.message);
+        return;
+      }
+      setGoals([...goals, data]);
+    }
+
+    resetGoalForm();
+    setShowGoalForm(false);
+    router.refresh();
+  };
+
+  const handleDeleteGoal = async (id: string, name: string) => {
+    if (!window.confirm(`Delete goal "${name}"? Linked contributions will also be deleted.`)) return;
+    const { error: e } = await supabase.from("savings_goals").delete().eq("id", id);
+    if (e) {
+      window.alert(e.message);
+      return;
+    }
+    setGoals(goals.filter((g) => g.id !== id));
+    setContributions(contributions.filter((c) => c.goal_id !== id));
+    router.refresh();
+  };
+
+  const handleAddContribution = async () => {
+    setError("");
+
+    if (!contribGoalId || !contribBankId || !contribAmount) {
+      setError("All contribution fields required.");
+      return;
+    }
+    if (parseFloat(contribAmount) <= 0) {
+      setError("Amount must be > 0.");
+      return;
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error: e } = await supabase
+      .from("savings_contributions")
+      .insert({
+        user_id: user.id,
+        goal_id: contribGoalId,
+        bank_account_id: contribBankId,
+        amount: parseFloat(contribAmount),
+        contribution_date: contribDate,
+        notes: contribNotes.trim() || null,
+      })
+      .select()
+      .single();
+
+    if (e) {
+      setError(e.message);
+      return;
+    }
+
+    setContributions([data, ...contributions]);
+    setContribAmount("");
+    setContribNotes("");
+    setShowContribForm(false);
+    router.refresh();
+  };
+
+  const handleUndoLastContribution = async (goalId: string, goalName: string) => {
+    // Contributions array is already sorted desc, so first match is the most recent
+    const lastContrib = contributions.find((c) => c.goal_id === goalId);
+
+    if (!lastContrib) {
+      window.alert(`No contributions to undo for "${goalName}".`);
+      return;
+    }
+
+    const bank = bankAccounts.find((b) => b.id === lastContrib.bank_account_id);
+    const confirmed = window.confirm(
+      `Undo last contribution to "${goalName}"?\n\n$${Number(lastContrib.amount).toFixed(
+        2
+      )} from ${bank?.name || "Unknown"} on ${lastContrib.contribution_date}`
+    );
+
+    if (!confirmed) return;
+
+    const { error: e } = await supabase
+      .from("savings_contributions")
+      .delete()
+      .eq("id", lastContrib.id);
+
+    if (e) {
+      window.alert(`Failed to undo: ${e.message}`);
+      return;
+    }
+
+    setContributions(contributions.filter((c) => c.id !== lastContrib.id));
+    router.refresh();
+  };
+
   const toUSD = (amount: number, fromCurrency: Currency): number => {
     if (fromCurrency === "USD") return amount;
     return amount / inrToUsdRate;
@@ -337,6 +534,22 @@ export default function LoansClient({
   });
 
   const totalDebtUSD = loansWithMath.reduce((sum, l) => sum + l.balanceUSD, 0);
+
+  // Compute goal totals
+  const goalsWithMath = goals.map((goal) => {
+    const saved = contributions
+      .filter((c) => c.goal_id === goal.id)
+      .reduce((sum, c) => sum + Number(c.amount), 0);
+    const target = Number(goal.target_amount);
+    const remaining = Math.max(0, target - saved);
+    const percent = target > 0 ? Math.min((saved / target) * 100, 100) : 0;
+    const savedUSD = toUSD(saved, goal.currency);
+    const targetUSD = toUSD(target, goal.currency);
+    return { goal, saved, target, remaining, percent, savedUSD, targetUSD };
+  });
+
+  const totalSavedUSD = goalsWithMath.reduce((sum, g) => sum + g.savedUSD, 0);
+  const totalTargetUSD = goalsWithMath.reduce((sum, g) => sum + g.targetUSD, 0);
 
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-950 p-6 md:p-12">
@@ -677,6 +890,259 @@ export default function LoansClient({
             </div>
           </section>
         )}
+
+        {/* GOALS HEADER */}
+        <header className="mb-4 mt-12">
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Goals</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Money set aside for future spending.
+          </p>
+        </header>
+
+        {/* Total saved summary */}
+        {goals.length > 0 && (
+          <section className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6 mb-6">
+            <div className="flex justify-between items-baseline">
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Total saved
+              </h3>
+              <span className="text-2xl font-semibold text-green-600 dark:text-green-400">
+                ${totalSavedUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              of ${totalTargetUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total target
+            </p>
+          </section>
+        )}
+
+        {/* Goal list */}
+        {goalsWithMath.length === 0 ? (
+          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-8 text-center mb-6">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">No goals yet.</p>
+          </div>
+        ) : (
+          <div className="space-y-3 mb-6">
+            {goalsWithMath.map(({ goal, saved, target, remaining, percent }) => (
+              <section
+                key={goal.id}
+                className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                      {goal.name}
+                    </h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Target: {formatCurrency(target, goal.currency)}
+                      {goal.target_date && ` by ${goal.target_date}`}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setContribGoalId(goal.id);
+                        setShowContribForm(true);
+                        setShowGoalForm(false);
+                      }}
+                      className="text-xs px-3 py-1 rounded-md border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+                    >
+                      Add
+                    </button>
+                    <button
+                      onClick={() => handleUndoLastContribution(goal.id, goal.name)}
+                      className="text-xs px-3 py-1 rounded-md border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+                    >
+                      Undo
+                    </button>
+                    <button
+                      onClick={() => startEditGoal(goal)}
+                      className="text-xs px-3 py-1 rounded-md border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteGoal(goal.id, goal.name)}
+                      className="text-xs px-3 py-1 rounded-md border border-gray-300 dark:border-gray-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 cursor-pointer"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500 dark:text-gray-400">Saved</span>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                      {formatCurrency(saved, goal.currency)} / {formatCurrency(target, goal.currency)}{" "}
+                      <span className="text-xs text-gray-400 dark:text-gray-500">({percent.toFixed(1)}%)</span>
+                    </span>
+                  </div>
+                  <div className="bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden" style={{ height: "6px" }}>
+                    <div
+                      className="bg-green-500 transition-all"
+                      style={{ width: `${percent}%`, height: "100%" }}
+                    />
+                  </div>
+                  {remaining > 0 && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {formatCurrency(remaining, goal.currency)} remaining
+                    </p>
+                  )}
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
+
+        <button
+          onClick={() => {
+            resetGoalForm();
+            setShowGoalForm(!showGoalForm);
+            setShowContribForm(false);
+          }}
+          className="w-full text-sm py-2 mb-6 rounded-md border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+        >
+          {showGoalForm ? "Cancel" : "+ Add goal"}
+        </button>
+
+        {/* Goal add/edit form */}
+        {showGoalForm && (
+          <section className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6 mb-6">
+            <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
+              {editingGoal ? "Edit Goal" : "Add Goal"}
+            </h2>
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="Goal name (e.g. Car fund)"
+                value={goalName}
+                onChange={(e) => setGoalName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300"
+              />
+
+              <div className="grid grid-cols-3 gap-3">
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Target amount"
+                  value={goalTarget}
+                  onChange={(e) => setGoalTarget(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300"
+                />
+                <select
+                  value={goalCurrency}
+                  onChange={(e) => setGoalCurrency(e.target.value as Currency)}
+                  className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300"
+                >
+                  <option value="USD">USD</option>
+                  <option value="INR">INR</option>
+                </select>
+                <input
+                  type="date"
+                  value={goalTargetDate}
+                  onChange={(e) => setGoalTargetDate(e.target.value)}
+                  placeholder="Target date"
+                  className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300"
+                />
+              </div>
+
+              <input
+                type="text"
+                placeholder="Notes (optional)"
+                value={goalNotes}
+                onChange={(e) => setGoalNotes(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300"
+              />
+
+              {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+
+              <button
+                onClick={handleSaveGoal}
+                className="w-full bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 py-2 rounded-md text-sm font-medium cursor-pointer hover:bg-blue-600 dark:hover:bg-blue-500 hover:text-white transition-colors"
+              >
+                {editingGoal ? "Save changes" : "Add goal"}
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* Contribution form */}
+        {showContribForm && (
+          <section className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6 mb-6">
+            <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
+              Add Contribution
+            </h2>
+            <div className="space-y-3">
+              <select
+                value={contribGoalId}
+                onChange={(e) => setContribGoalId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300"
+              >
+                {goals.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={contribBankId}
+                onChange={(e) => setContribBankId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300"
+              >
+                {bankAccounts.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    From {b.name}
+                  </option>
+                ))}
+              </select>
+
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Amount"
+                  value={contribAmount}
+                  onChange={(e) => setContribAmount(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300"
+                />
+                <input
+                  type="date"
+                  value={contribDate}
+                  onChange={(e) => setContribDate(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300"
+                />
+              </div>
+
+              <input
+                type="text"
+                placeholder="Notes (optional)"
+                value={contribNotes}
+                onChange={(e) => setContribNotes(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300"
+              />
+
+              {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={handleAddContribution}
+                  className="flex-1 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 py-2 rounded-md text-sm font-medium cursor-pointer hover:bg-blue-600 dark:hover:bg-blue-500 hover:text-white transition-colors"
+                >
+                  Record contribution
+                </button>
+                <button
+                  onClick={() => setShowContribForm(false)}
+                  className="px-4 py-2 rounded-md text-sm font-medium border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
 
         {/* Recent payments */}
         {payments.length > 0 && (

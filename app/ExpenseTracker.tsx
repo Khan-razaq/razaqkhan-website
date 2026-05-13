@@ -62,6 +62,12 @@ type CardPayment = {
   amount: number;
 };
 
+type Contribution = {
+  id: string;
+  bank_account_id: string;
+  amount: number;
+};
+
 const CATEGORIES = ["Food", "Transport", "Shopping", "Bills", "Other"];
 const PAYMENT_METHODS: PaymentMethod[] = ["Discover", "Amex", "Citi", "Cash", "Debit"];
 const BANK_METHODS: PaymentMethod[] = ["Cash", "Debit"];
@@ -107,6 +113,7 @@ export default function ExpenseTracker({
   deposits,
   loanPayments,
   cardPayments,
+  contributions,
 }: {
   bankAccounts: BankAccount[];
   creditCards: CreditCard[];
@@ -114,6 +121,7 @@ export default function ExpenseTracker({
   deposits: Deposit[];
   loanPayments: LoanPayment[];
   cardPayments: CardPayment[];
+  contributions: Contribution[];
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -153,7 +161,12 @@ export default function ExpenseTracker({
       .filter((p) => p.bank_account_id === account.id)
       .reduce((sum, p) => sum + Number(p.amount), 0);
 
-    const balance = Number(account.starting_balance) + incomeIn - expensesOut - loansOut - cardsOut;
+    const contribsOut = contributions
+      .filter((c) => c.bank_account_id === account.id)
+      .reduce((sum, c) => sum + Number(c.amount), 0);
+
+    const balance =
+      Number(account.starting_balance) + incomeIn - expensesOut - loansOut - cardsOut - contribsOut;
     return { account, balance };
   });
 
