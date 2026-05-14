@@ -54,6 +54,15 @@ type SavingsContribution = {
   notes: string | null;
 };
 
+type LoanPayment = {
+  id: string;
+  loan_id: string;
+  bank_account_id: string;
+  amount: number;
+  payment_date: string;
+  notes: string | null;
+};
+
 type FixedExpense = {
   id: string;
   name: string;
