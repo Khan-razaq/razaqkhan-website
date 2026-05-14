@@ -12,15 +12,17 @@ export default async function SetupPage() {
     redirect("/login");
   }
 
-  const [bankAccountsResult, creditCardsResult] = await Promise.all([
+  const [bankAccountsResult, creditCardsResult, fixedExpensesResult] = await Promise.all([
     supabase.from("bank_accounts").select("*").order("display_order", { ascending: true }),
     supabase.from("credit_cards").select("*").order("display_order", { ascending: true }),
+    supabase.from("fixed_expenses").select("*").order("display_order", { ascending: true }),
   ]);
 
   return (
     <SetupForm
       initialBankAccounts={bankAccountsResult.data || []}
       initialCreditCards={creditCardsResult.data || []}
+      initialFixedExpenses={fixedExpensesResult.data || []}
     />
   );
 }
