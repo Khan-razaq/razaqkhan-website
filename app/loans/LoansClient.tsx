@@ -40,6 +40,7 @@ type SavingsGoal = {
   target_amount: number;
   currency: Currency;
   target_date: string | null;
+  monthly_contribution_usd: number | null;
   notes: string | null;
   display_order: number;
 };
@@ -51,6 +52,14 @@ type SavingsContribution = {
   amount: number;
   contribution_date: string;
   notes: string | null;
+};
+
+type FixedExpense = {
+  id: string;
+  name: string;
+  amount: number;
+  bank_account_id: string;
+  billing_day: number;
 };
 
 // Compute current balance for a loan as of today.
@@ -141,20 +150,33 @@ export default function LoansClient({
   bankAccounts,
   loans: initialLoans,
   payments: initialPayments,
-  inrToUsdRate,
+  inrToUsdRate: initialInrRate,
+  monthlyBuffer: initialBuffer,
+  expectedMonthlyIncome: initialIncome,
   goals: initialGoals,
   contributions: initialContributions,
+  fixedExpenses,
 }: {
   bankAccounts: BankAccount[];
   loans: Loan[];
   payments: LoanPayment[];
   inrToUsdRate: number;
+  monthlyBuffer: number;
+  expectedMonthlyIncome: number;
   goals: SavingsGoal[];
   contributions: SavingsContribution[];
+  fixedExpenses: FixedExpense[];
 }) {
   const router = useRouter();
   const supabase = createClient();
 
+  // Calculator settings state
+  const [inrToUsdRate, setInrToUsdRate] = useState(initialInrRate);
+  const [monthlyBuffer, setMonthlyBuffer] = useState(initialBuffer);
+  const [expectedIncome, setExpectedIncome] = useState(initialIncome);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsSaved, setSettingsSaved] = useState(false);
+  
   const [loans, setLoans] = useState<Loan[]>(initialLoans);
   const [payments, setPayments] = useState<LoanPayment[]>(initialPayments);
   const [showLoanForm, setShowLoanForm] = useState(initialLoans.length === 0);
@@ -481,6 +503,48 @@ export default function LoansClient({
     router.refresh();
   };
 
+  const handleSaveSettings = async () => {
+    setSavingSettings(true);
+    setSettingsSaved(false);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setSavingSettings(false);
+      return;
+    }
+
+    const payload = {
+      user_id: user.id,
+      inr_to_usd_rate: inrToUsdRate,
+      monthly_buffer_usd: monthlyBuffer,
+      expected_monthly_income_usd: expectedIncome,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Try update first; if no row, insert
+    const { error: updateError } = await supabase
+      .from("user_settings")
+      .update(payload)
+      .eq("user_id", user.id);
+
+    if (updateError) {
+      // Row may not exist, try insert
+      const { error: insertError } = await supabase.from("user_settings").insert(payload);
+      if (insertError) {
+        window.alert(`Failed to save settings: ${insertError.message}`);
+        setSavingSettings(false);
+        return;
+      }
+    }
+
+    setSavingSettings(false);
+    setSettingsSaved(true);
+    router.refresh();
+    setTimeout(() => setSettingsSaved(false), 2000);
+  };
+
   const handleUndoLastContribution = async (goalId: string, goalName: string) => {
     // Contributions array is already sorted desc, so first match is the most recent
     const lastContrib = contributions.find((c) => c.goal_id === goalId);
@@ -535,6 +599,74 @@ export default function LoansClient({
 
   const totalDebtUSD = loansWithMath.reduce((sum, l) => sum + l.balanceUSD, 0);
 
+  // ===== PLAN CALCULATOR MATH =====
+  const todayDate = new Date();
+
+  // Total fixed expenses per month
+  const monthlyFixedTotal = fixedExpenses.reduce(
+    (sum, fe) => sum + Number(fe.amount),
+    0
+  );
+
+  // Active EMI total (loans where EMI has started; convert INR EMI to USD)
+  const activeEmiUSD = loans.reduce((sum, loan) => {
+    if (!loan.emi_amount || !loan.emi_start_date) return sum;
+    const emiStart = new Date(loan.emi_start_date);
+    if (emiStart > todayDate) return sum;
+    const emi = Number(loan.emi_amount);
+    const emiInUSD = loan.currency === "INR" ? emi / inrToUsdRate : emi;
+    return sum + emiInUSD;
+  }, 0);
+
+  // Free per month available for goals + bank loan extra
+  const freePerMonth = expectedIncome - monthlyFixedTotal - activeEmiUSD - monthlyBuffer;
+
+  // Required per goal (each in USD)
+  const goalRequirements = goals.map((goal) => {
+    // Sum of contributions to this goal so far
+    const saved = contributions
+      .filter((c) => c.goal_id === goal.id)
+      .reduce((sum, c) => sum + Number(c.amount), 0);
+    const savedUSD = goal.currency === "INR" ? saved / inrToUsdRate : saved;
+    const targetUSD =
+      goal.currency === "INR"
+        ? Number(goal.target_amount) / inrToUsdRate
+        : Number(goal.target_amount);
+
+    let required = 0;
+    let basis = "none";
+
+    if (goal.monthly_contribution_usd && Number(goal.monthly_contribution_usd) > 0) {
+      required = Number(goal.monthly_contribution_usd);
+      basis = "manual";
+    } else if (goal.target_date) {
+      const remainingUSD = Math.max(0, targetUSD - savedUSD);
+      const target = new Date(goal.target_date);
+      const monthsLeft = Math.max(
+        1,
+        Math.round(
+          (target.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24 * 30)
+        )
+      );
+      required = remainingUSD / monthsLeft;
+      basis = "deadline";
+    }
+
+    return { goal, required, savedUSD, targetUSD, basis };
+  });
+
+  const totalRequiredForGoals = goalRequirements.reduce((sum, g) => sum + g.required, 0);
+  const surplusForBankLoan = Math.max(0, freePerMonth - totalRequiredForGoals);
+  const shortfall = Math.max(0, totalRequiredForGoals - freePerMonth);
+
+  let planStatus: "feasible" | "tight" | "infeasible";
+  if (freePerMonth >= totalRequiredForGoals) {
+    planStatus = surplusForBankLoan > 100 ? "feasible" : "tight";
+  } else {
+    planStatus = "infeasible";
+  }
+  // ===== END PLAN MATH =====
+  
   // Compute goal totals
   const goalsWithMath = goals.map((goal) => {
     const saved = contributions
@@ -891,6 +1023,164 @@ export default function LoansClient({
           </section>
         )}
 
+        {/* CALCULATOR SETTINGS */}
+        <section className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6 mb-6 mt-12">
+          <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
+            Calculator Settings
+          </h2>
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            <div>
+              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                Monthly income ($)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={expectedIncome === 0 ? "" : expectedIncome}
+                onChange={(e) => setExpectedIncome(parseFloat(e.target.value) || 0)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                Buffer ($)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={monthlyBuffer === 0 ? "" : monthlyBuffer}
+                onChange={(e) => setMonthlyBuffer(parseFloat(e.target.value) || 0)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                INR → USD rate
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={inrToUsdRate === 0 ? "" : inrToUsdRate}
+                onChange={(e) => setInrToUsdRate(parseFloat(e.target.value) || 90)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300"
+              />
+            </div>
+          </div>
+          <button
+            onClick={handleSaveSettings}
+            disabled={savingSettings}
+            className="text-xs px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer disabled:opacity-50"
+          >
+            {savingSettings ? "Saving..." : settingsSaved ? "✓ Saved" : "Save settings"}
+          </button>
+        </section>
+
+        {/* PLAN CALCULATOR */}
+        <section className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6 mb-6">
+          <div className="flex items-baseline justify-between mb-4">
+            <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300">Plan</h2>
+            <span
+              className={`text-xs font-semibold uppercase tracking-wide ${
+                planStatus === "feasible"
+                  ? "text-green-600 dark:text-green-400"
+                  : planStatus === "tight"
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-red-600 dark:text-red-400"
+              }`}
+            >
+              {planStatus}
+            </span>
+          </div>
+
+          {/* Math breakdown */}
+          <div className="space-y-1.5 pb-4 border-b border-gray-200 dark:border-gray-800">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500 dark:text-gray-400">Monthly income</span>
+              <span className="text-gray-900 dark:text-gray-100">+${expectedIncome.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500 dark:text-gray-400">Fixed expenses</span>
+              <span className="text-red-600 dark:text-red-400">−${monthlyFixedTotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500 dark:text-gray-400">Active loan EMIs</span>
+              <span className="text-red-600 dark:text-red-400">−${activeEmiUSD.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500 dark:text-gray-400">Buffer (cushion)</span>
+              <span className="text-red-600 dark:text-red-400">−${monthlyBuffer.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm pt-2 border-t border-gray-100 dark:border-gray-800 font-medium">
+              <span className="text-gray-700 dark:text-gray-300">Free per month</span>
+              <span
+                className={
+                  freePerMonth < 0
+                    ? "text-red-600 dark:text-red-400"
+                    : "text-gray-900 dark:text-gray-100"
+                }
+              >
+                ${freePerMonth.toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+          {/* Diagnosis */}
+          {planStatus === "feasible" && (
+            <p className="text-sm text-green-700 dark:text-green-300 mt-4">
+              All goals fundable. <strong>${surplusForBankLoan.toFixed(2)}/month</strong> extra recommended toward bank loan.
+            </p>
+          )}
+          {planStatus === "tight" && (
+            <p className="text-sm text-amber-700 dark:text-amber-300 mt-4">
+              Just barely fits — only ${surplusForBankLoan.toFixed(2)}/month surplus for bank loan. Consider tightening fixed expenses or increasing income.
+            </p>
+          )}
+          {planStatus === "infeasible" && (
+            <p className="text-sm text-red-700 dark:text-red-300 mt-4">
+              Shortfall of <strong>${shortfall.toFixed(2)}/month</strong>. Goals can't all be met at this pace. Options: extend goal deadlines, reduce targets, lower buffer, or increase income.
+            </p>
+          )}
+
+          {/* Per-goal recommendations */}
+          {goalRequirements.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800">
+              <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                Recommended monthly allocations
+              </h3>
+              <div className="space-y-1.5">
+                {goalRequirements.map(({ goal, required, basis }) => (
+                  <div key={goal.id} className="flex justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">
+                      {goal.name}
+                      <span className="text-xs text-gray-400 dark:text-gray-500 ml-2">
+                        ({basis === "manual"
+                          ? "fixed"
+                          : basis === "deadline"
+                          ? "by deadline"
+                          : "no deadline, no amount set"})
+                      </span>
+                    </span>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                      ${required.toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+                {surplusForBankLoan > 0 && (
+                  <div className="flex justify-between text-sm pt-2 border-t border-gray-100 dark:border-gray-800">
+                    <span className="text-gray-600 dark:text-gray-400">
+                      Extra to bank loan{" "}
+                      <span className="text-xs text-gray-400 dark:text-gray-500">(surplus)</span>
+                    </span>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                      ${surplusForBankLoan.toFixed(2)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+        
         {/* GOALS HEADER */}
         <header className="mb-4 mt-12">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Goals</h2>
