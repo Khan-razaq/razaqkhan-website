@@ -1,14 +1,14 @@
 "use client";
 
+// Tailwind scanner hints: these classes are used dynamically, force generation
+// text-amber-600 dark:text-amber-400 text-red-600 dark:text-red-400 text-green-600 dark:text-green-400
+// bg-amber-500 bg-red-500 bg-green-500
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import ThemeToggle from "./ThemeToggle";
-
-// Tailwind scanner hints: these classes are used dynamically, force generation
-// text-amber-600 dark:text-amber-400 text-red-600 dark:text-red-400 text-green-600 dark:text-green-400
-// bg-amber-500 bg-red-500 bg-green-500
 
 type PaymentMethod = "Discover" | "Amex" | "Citi" | "Cash" | "Debit";
 
@@ -62,10 +62,25 @@ type CardPayment = {
   amount: number;
 };
 
+type Contribution = {
+  id: string;
+  bank_account_id: string;
+  amount: number;
+};
+
+type FixedExpense = {
+  id: string;
+  name: string;
+  amount: number;
+  bank_account_id: string;
+  billing_day: number;
+  active: boolean;
+  created_at: string;
+};
+
 const CATEGORIES = ["Food", "Transport", "Shopping", "Bills", "Other"];
 const PAYMENT_METHODS: PaymentMethod[] = ["Discover", "Amex", "Citi", "Cash", "Debit"];
 const BANK_METHODS: PaymentMethod[] = ["Cash", "Debit"];
-// Map a payment method to a card name (for auto-matching)
 const METHOD_TO_CARD_NAME: Record<string, string> = {
   Discover: "Discover",
   Amex: "Amex",
@@ -100,6 +115,42 @@ function nextDueDateInfo(dueDay: number | null): { days: number; date: Date } | 
   return { days, date: dueDate };
 }
 
+// Count how many billing-day occurrences have happened for a fixed expense
+// between when it was added and today.
+function countFixedExpenseDeductions(fe: FixedExpense, today: Date): number {
+  const createdAt = new Date(fe.created_at);
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  let count = 0;
+  let cursorYear = createdAt.getFullYear();
+  let cursorMonth = createdAt.getMonth();
+
+  for (let i = 0; i < 240; i++) {
+    const lastDayOfMonth = new Date(cursorYear, cursorMonth + 1, 0).getDate();
+    const actualBillingDay = Math.min(fe.billing_day, lastDayOfMonth);
+    const billingDate = new Date(cursorYear, cursorMonth, actualBillingDay);
+
+    if (billingDate >= createdAt && billingDate <= todayMidnight) {
+      count++;
+    }
+
+    cursorMonth++;
+    if (cursorMonth > 11) {
+      cursorMonth = 0;
+      cursorYear++;
+    }
+
+    if (
+      cursorYear > todayMidnight.getFullYear() ||
+      (cursorYear === todayMidnight.getFullYear() && cursorMonth > todayMidnight.getMonth())
+    ) {
+      break;
+    }
+  }
+
+  return count;
+}
+
 export default function ExpenseTracker({
   bankAccounts,
   creditCards,
@@ -107,6 +158,8 @@ export default function ExpenseTracker({
   deposits,
   loanPayments,
   cardPayments,
+  contributions,
+  fixedExpenses,
 }: {
   bankAccounts: BankAccount[];
   creditCards: CreditCard[];
@@ -114,6 +167,8 @@ export default function ExpenseTracker({
   deposits: Deposit[];
   loanPayments: LoanPayment[];
   cardPayments: CardPayment[];
+  contributions: Contribution[];
+  fixedExpenses: FixedExpense[];
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -128,14 +183,16 @@ export default function ExpenseTracker({
   const [error, setError] = useState<{ field: string; message: string } | null>(null);
 
   const isCardMethod = !BANK_METHODS.includes(paymentMethod);
-  // Auto-match: find the card whose name matches the payment method
   const matchingCards = isCardMethod
-    ? creditCards.filter((c) => c.name.toLowerCase() === METHOD_TO_CARD_NAME[paymentMethod]?.toLowerCase())
+    ? creditCards.filter(
+        (c) => c.name.toLowerCase() === METHOD_TO_CARD_NAME[paymentMethod]?.toLowerCase()
+      )
     : [];
   const autoMatchedCardId = matchingCards.length === 1 ? matchingCards[0].id : null;
   const showCardDropdown = isCardMethod && !autoMatchedCardId;
 
   // Bank account balances
+  const today = new Date();
   const bankBalances = bankAccounts.map((account) => {
     const incomeIn = deposits
       .filter((d) => d.bank_account_id === account.id)
@@ -153,7 +210,22 @@ export default function ExpenseTracker({
       .filter((p) => p.bank_account_id === account.id)
       .reduce((sum, p) => sum + Number(p.amount), 0);
 
-    const balance = Number(account.starting_balance) + incomeIn - expensesOut - loansOut - cardsOut;
+    const contribsOut = contributions
+      .filter((c) => c.bank_account_id === account.id)
+      .reduce((sum, c) => sum + Number(c.amount), 0);
+
+    const fixedOut = fixedExpenses
+      .filter((fe) => fe.bank_account_id === account.id)
+      .reduce((sum, fe) => sum + countFixedExpenseDeductions(fe, today) * Number(fe.amount), 0);
+
+    const balance =
+      Number(account.starting_balance) +
+      incomeIn -
+      expensesOut -
+      loansOut -
+      cardsOut -
+      contribsOut -
+      fixedOut;
     return { account, balance };
   });
 
@@ -192,7 +264,7 @@ export default function ExpenseTracker({
       return;
     }
 
-    if (isCardMethod && !creditCardId) {
+    if (isCardMethod && !creditCardId && !autoMatchedCardId) {
       setError({ field: "card", message: "Please select a credit card." });
       return;
     }
@@ -221,7 +293,7 @@ export default function ExpenseTracker({
         payment_method: paymentMethod,
         expense_date: new Date().toISOString().split("T")[0],
         bank_account_id: isCardMethod ? null : bankAccountId,
-        credit_card_id: isCardMethod ? (autoMatchedCardId || creditCardId) : null,
+        credit_card_id: isCardMethod ? autoMatchedCardId || creditCardId : null,
       })
       .select()
       .single();
@@ -299,16 +371,28 @@ export default function ExpenseTracker({
             </div>
           </div>
           <nav className="flex gap-4 text-xs">
-            <Link href="/income" className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
+            <Link
+              href="/income"
+              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+            >
               Income
             </Link>
-            <Link href="/payments" className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
+            <Link
+              href="/payments"
+              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+            >
               Payments
             </Link>
-            <Link href="/loans" className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
+            <Link
+              href="/loans"
+              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+            >
               Loans
             </Link>
-            <Link href="/setup" className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
+            <Link
+              href="/setup"
+              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+            >
               Setup
             </Link>
           </nav>
@@ -320,14 +404,18 @@ export default function ExpenseTracker({
             <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300">Net cash</h2>
             <span
               className={`text-2xl font-semibold ${
-                netWorth < 0 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-gray-100"
+                netWorth < 0
+                  ? "text-red-600 dark:text-red-400"
+                  : "text-gray-900 dark:text-gray-100"
               }`}
             >
               ${netWorth.toFixed(2)}
             </span>
           </div>
           <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 pt-3 border-t border-gray-100 dark:border-gray-800">
-            <span>Cash ${totalCash.toFixed(2)} − Cards owed ${totalCardsOwed.toFixed(2)}</span>
+            <span>
+              Cash ${totalCash.toFixed(2)} − Cards owed ${totalCardsOwed.toFixed(2)}
+            </span>
           </div>
         </section>
 
@@ -343,7 +431,10 @@ export default function ExpenseTracker({
           </div>
           <div className="space-y-2">
             {bankBalances.map(({ account, balance }) => (
-              <div key={account.id} className="flex justify-between items-baseline text-sm">
+              <div
+                key={account.id}
+                className="flex justify-between items-baseline text-sm"
+              >
                 <span className="text-gray-600 dark:text-gray-400">
                   {account.name}{" "}
                   <span className="text-xs text-gray-400 dark:text-gray-500">
@@ -352,7 +443,9 @@ export default function ExpenseTracker({
                 </span>
                 <span
                   className={`font-medium ${
-                    balance < 0 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-gray-100"
+                    balance < 0
+                      ? "text-red-600 dark:text-red-400"
+                      : "text-gray-900 dark:text-gray-100"
                   }`}
                 >
                   ${balance.toFixed(2)}
@@ -419,7 +512,10 @@ export default function ExpenseTracker({
                       </span>
                     </div>
                     {card.credit_limit > 0 && (
-                      <div className="bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden" style={{ height: "6px" }}>
+                      <div
+                        className="bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden"
+                        style={{ height: "6px" }}
+                      >
                         <div
                           className={`transition-all ${
                             utilization > 80
@@ -428,7 +524,10 @@ export default function ExpenseTracker({
                               ? "bg-amber-500"
                               : "bg-green-500"
                           }`}
-                          style={{ width: `${Math.min(utilization, 100)}%`, height: "100%" }}
+                          style={{
+                            width: `${Math.min(utilization, 100)}%`,
+                            height: "100%",
+                          }}
                         />
                       </div>
                     )}
@@ -503,7 +602,6 @@ export default function ExpenseTracker({
               ))}
             </select>
 
-            {/* Conditional account/card selector */}
             {showCardDropdown ? (
               <div>
                 <select
@@ -584,7 +682,8 @@ export default function ExpenseTracker({
                       {expense.description}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      {expense.category} · {expense.payment_method} · {expenseSourceLabel(expense)} · {expense.expense_date}
+                      {expense.category} · {expense.payment_method} ·{" "}
+                      {expenseSourceLabel(expense)} · {expense.expense_date}
                     </p>
                   </div>
                   <div className="flex items-center gap-3 ml-4">
