@@ -886,6 +886,63 @@ export default function LoansClient({
   const budgetExtraValue = parseFloat(totalBudgetExtra) || 0;
   const modeBResults = simulateBudgetMode(budgetExtraValue, effectivePriorityOrder);
 
+  // ===== STRATEGY COMPARISON FOR BANNER =====
+  // "Recommended Plan" (parallel): each loan gets its recommended amount simultaneously
+  const recommendedPlanResults = loansForSim.map((info) => {
+    const rec = recommendation.perLoan.find((r) => r.loanId === info.loan.id);
+    const recommendedUSD = rec?.recommendedUSD || 0;
+    const overrideKey = info.loan.id;
+    const overrideVal = recommendationOverrides[overrideKey];
+    const actualUsed =
+      overrideVal !== undefined && overrideVal !== ""
+        ? parseFloat(overrideVal) || 0
+        : recommendedUSD;
+
+    return simulateLoanPayoff({
+      startingBalanceUSD: info.balanceUSD,
+      monthlyRate: info.monthlyRate,
+      baseEmiUSD: info.emiUSD,
+      extraPerMonthUSD: actualUsed,
+      fromDate: info.fromDate,
+    });
+  });
+
+  const recommendedMaxMonths = Math.max(0, ...recommendedPlanResults.map((r) => r.months));
+  const recommendedTotalInterest = recommendedPlanResults.reduce(
+    (sum, r) => sum + r.totalInterest,
+    0
+  );
+  const recommendedHasInfeasible = recommendedPlanResults.some(
+    (r) => r.status === "interest_only" || r.status === "never"
+  );
+
+  // Avalanche from budget mode
+  const avalancheMaxMonths = modeBResults.totalMonths;
+  const avalancheTotalInterest = modeBResults.perLoan.reduce(
+    (sum, r) => sum + r.totalInterest,
+    0
+  );
+  const avalancheHasResults = modeBResults.perLoan.length > 0 && avalancheMaxMonths > 0;
+
+  // Compute the deltas (only if both strategies have results)
+  const monthsSaved =
+    avalancheHasResults && !recommendedHasInfeasible && recommendedMaxMonths > 0
+      ? recommendedMaxMonths - avalancheMaxMonths
+      : null;
+  const interestSaved =
+    avalancheHasResults && !recommendedHasInfeasible
+      ? recommendedTotalInterest - avalancheTotalInterest
+      : null;
+
+  // Helper to format months → date
+  const monthsToDateLabel = (months: number): string => {
+    if (months <= 0) return "—";
+    const d = new Date();
+    d.setMonth(d.getMonth() + months);
+    return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  };
+  // ===== END STRATEGY COMPARISON =====
+
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-950 p-6 md:p-12">
       <div className="max-w-6xl mx-auto">
@@ -1394,6 +1451,90 @@ export default function LoansClient({
           </section>
         </div>
 
+        {/* STRATEGY COMPARISON BANNER */}
+        {loansForSim.length > 0 && (
+          <section className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6 mb-6">
+            <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
+              Strategy comparison
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              {/* Recommended Plan side */}
+              <div className="border border-gray-200 dark:border-gray-800 rounded-md p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
+                  Recommended Plan (parallel)
+                </p>
+                {recommendedHasInfeasible ? (
+                  <p className="text-sm text-red-600 dark:text-red-400">
+                    One or more loans grow forever at current amounts. Increase income/allocation or check the simulator.
+                  </p>
+                ) : recommendedMaxMonths === 0 ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    No allocations yet. Set your income in Calculator Settings.
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-base text-gray-900 dark:text-gray-100">
+                      All debts cleared{" "}
+                      <strong>{monthsToDateLabel(recommendedMaxMonths)}</strong>
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {recommendedMaxMonths} months · ${recommendedTotalInterest.toFixed(0)} total interest
+                    </p>
+                  </>
+                )}
+              </div>
+
+              {/* Avalanche side */}
+              <div className="border border-gray-200 dark:border-gray-800 rounded-md p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
+                  Try Different Priorities (avalanche)
+                </p>
+                {!avalancheHasResults ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Set a Total monthly $ amount below to compare.
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-base text-gray-900 dark:text-gray-100">
+                      All debts cleared{" "}
+                      <strong>{monthsToDateLabel(avalancheMaxMonths)}</strong>
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {avalancheMaxMonths} months · ${avalancheTotalInterest.toFixed(0)} total interest
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Delta line */}
+            {monthsSaved !== null && interestSaved !== null && (
+              <div className="pt-3 border-t border-gray-200 dark:border-gray-800">
+                {monthsSaved > 0 && interestSaved > 0 ? (
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                    Avalanche saves <strong className="text-green-600 dark:text-green-400">{monthsSaved} months</strong> and{" "}
+                    <strong className="text-green-600 dark:text-green-400">
+                      ${interestSaved.toFixed(0)}
+                    </strong>{" "}
+                    in interest vs. parallel — but puts other loans on hold while one gets attacked.
+                  </p>
+                ) : monthsSaved < 0 ? (
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                    Parallel finishes <strong className="text-green-600 dark:text-green-400">{Math.abs(monthsSaved)} months</strong> sooner —
+                    your current avalanche budget is too small to outpace parallel allocations.
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                    Both strategies finish around the same time at current numbers.
+                  </p>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+        
         {/* RECOMMENDED PLAN + TRY DIFFERENT PRIORITIES (side by side on desktop) */}
         {loansForSim.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
