@@ -26,6 +26,8 @@ type Loan = {
   interest_compounding: Compounding;
   disbursement_date: string | null;
   moratorium_end_date: string | null;
+  force_include_in_plan: boolean;
+  payoff_target_months: number;
   notes: string | null;
 };
 
@@ -129,6 +131,65 @@ function computeCurrentBalance(loan: Loan, payments: LoanPayment[]): number {
   return Math.max(0, balance);
 }
 
+// Simulate paying off a loan month-by-month.
+// Returns months to payoff, total interest paid, and payoff date.
+// All amounts in USD. Caller is responsible for currency conversion.
+type SimulationResult = {
+  months: number;
+  totalInterest: number;
+  payoffDate: Date | null;
+  status: "paid_off" | "interest_only" | "never";
+};
+
+function simulateLoanPayoff(params: {
+  startingBalanceUSD: number;
+  monthlyRate: number; // e.g. 0.10/12 for 10% APR
+  baseEmiUSD: number; // EMI for this loan in USD (0 if not started yet)
+  extraPerMonthUSD: number;
+  fromDate: Date; // when simulation starts
+}): SimulationResult {
+  let balance = params.startingBalanceUSD;
+  const r = params.monthlyRate;
+  const monthlyPayment = params.baseEmiUSD + params.extraPerMonthUSD;
+  const safetyCap = 600; // 50 years
+
+  // Zero-interest loan
+  if (r === 0) {
+    if (monthlyPayment <= 0) {
+      return { months: 0, totalInterest: 0, payoffDate: null, status: "never" };
+    }
+    const months = Math.ceil(balance / monthlyPayment);
+    const payoff = new Date(params.fromDate);
+    payoff.setMonth(payoff.getMonth() + months);
+    return { months, totalInterest: 0, payoffDate: payoff, status: "paid_off" };
+  }
+
+  // Interest-bearing loan
+  if (monthlyPayment <= balance * r) {
+    // Payment doesn't cover interest — balance grows forever
+    return { months: 0, totalInterest: 0, payoffDate: null, status: "interest_only" };
+  }
+
+  let totalInterest = 0;
+  let months = 0;
+
+  while (balance > 0 && months < safetyCap) {
+    const interest = balance * r;
+    totalInterest += interest;
+    balance = balance + interest - monthlyPayment;
+    if (balance < 0) balance = 0;
+    months++;
+  }
+
+  if (months >= safetyCap) {
+    return { months, totalInterest, payoffDate: null, status: "never" };
+  }
+
+  const payoff = new Date(params.fromDate);
+  payoff.setMonth(payoff.getMonth() + months);
+  return { months, totalInterest, payoffDate: payoff, status: "paid_off" };
+}
+
 // Project full payoff date assuming standard EMI continues
 function projectedPayoffDate(loan: Loan, currentBalance: number): Date | null {
   if (!loan.emi_amount || !loan.emi_start_date || loan.interest_compounding === "none") {
@@ -185,6 +246,16 @@ export default function LoansClient({
   const [expectedIncome, setExpectedIncome] = useState(initialIncome);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
+
+  // Simulator state
+  const [simulatorMode, setSimulatorMode] = useState<"per_loan" | "budget">("per_loan");
+  const [simulateFromEmiStart, setSimulateFromEmiStart] = useState(false);
+  const [perLoanExtras, setPerLoanExtras] = useState<Record<string, string>>({});
+  const [totalBudgetExtra, setTotalBudgetExtra] = useState("");
+  const [priorityOrder, setPriorityOrder] = useState<string[]>([]);
+
+  // Override state for recommendations (each loan ID → user's chosen amount)
+  const [recommendationOverrides, setRecommendationOverrides] = useState<Record<string, string>>({});
   
   const [loans, setLoans] = useState<Loan[]>(initialLoans);
   const [payments, setPayments] = useState<LoanPayment[]>(initialPayments);
@@ -227,6 +298,8 @@ export default function LoansClient({
   const [tenureMonths, setTenureMonths] = useState("");
   const [compounding, setCompounding] = useState<Compounding>("daily");
   const [disbursementDate, setDisbursementDate] = useState(new Date().toISOString().split("T")[0]);
+  const [forceInclude, setForceInclude] = useState(false);
+  const [payoffTargetMonths, setPayoffTargetMonths] = useState("24");
   const [notes, setNotes] = useState("");
 
   // Payment form fields
@@ -247,6 +320,8 @@ export default function LoansClient({
     setTenureMonths("");
     setCompounding("daily");
     setDisbursementDate(new Date().toISOString().split("T")[0]);
+    setForceInclude(false);
+    setPayoffTargetMonths("24");
     setNotes("");
     setEditingLoan(null);
   };
@@ -264,6 +339,8 @@ export default function LoansClient({
     setTenureMonths(loan.tenure_months?.toString() || "");
     setCompounding(loan.interest_compounding);
     setDisbursementDate(loan.disbursement_date || new Date().toISOString().split("T")[0]);
+    setForceInclude(loan.force_include_in_plan || false);
+    setPayoffTargetMonths(loan.payoff_target_months?.toString() || "24");
     setNotes(loan.notes || "");
     setShowLoanForm(true);
   };
@@ -298,6 +375,8 @@ export default function LoansClient({
       tenure_months: tenureMonths ? parseInt(tenureMonths) : null,
       interest_compounding: compounding,
       disbursement_date: disbursementDate,
+      force_include_in_plan: forceInclude,
+      payoff_target_months: parseInt(payoffTargetMonths) || 24,
       notes: notes.trim() || null,
     };
 
@@ -532,20 +611,15 @@ export default function LoansClient({
       updated_at: new Date().toISOString(),
     };
 
-    // Try update first; if no row, insert
-    const { error: updateError } = await supabase
+    // Use upsert — handles both insert (no row) and update (row exists) atomically
+    const { error } = await supabase
       .from("user_settings")
-      .update(payload)
-      .eq("user_id", user.id);
+      .upsert(payload, { onConflict: "user_id" });
 
-    if (updateError) {
-      // Row may not exist, try insert
-      const { error: insertError } = await supabase.from("user_settings").insert(payload);
-      if (insertError) {
-        window.alert(`Failed to save settings: ${insertError.message}`);
-        setSavingSettings(false);
-        return;
-      }
+    if (error) {
+      window.alert(`Failed to save settings: ${error.message}`);
+      setSavingSettings(false);
+      return;
     }
 
     setSavingSettings(false);
@@ -610,6 +684,8 @@ export default function LoansClient({
 
   // ===== PLAN CALCULATOR MATH =====
   const todayDate = new Date();
+
+
 
   // Total fixed expenses per month
   const monthlyFixedTotal = fixedExpenses.reduce(
@@ -676,6 +752,229 @@ export default function LoansClient({
   }
   // ===== END PLAN MATH =====
   
+// ===== RECOMMENDATION ENGINE =====
+  // Computes recommended monthly amount per loan, given free cash after all other obligations.
+  type Recommendation = {
+    loanId: string;
+    recommendedUSD: number;
+    reason: string; // human-readable why
+  };
+
+  function computeRecommendation(): {
+    perLoan: Recommendation[];
+    totalAllocated: number;
+    unallocated: number;
+    infeasible: boolean;
+  } {
+    const recommendations: Recommendation[] = [];
+    let remaining = freePerMonth - totalRequiredForGoals;
+
+    if (remaining <= 0) {
+      // Nothing free to allocate
+      return { perLoan: [], totalAllocated: 0, unallocated: 0, infeasible: true };
+    }
+
+    // Step 1: allocate to force-include loans (uncle loans, anything user marked)
+    // Skip loans that have EMIs (those are already in active_emi total)
+    const forceIncluded = loans.filter(
+      (l) => l.force_include_in_plan && !l.emi_amount
+    );
+
+    for (const loan of forceIncluded) {
+      const balance = computeCurrentBalance(loan, payments);
+      const balanceUSD = loan.currency === "INR" ? balance / inrToUsdRate : balance;
+      const target = loan.payoff_target_months || 24;
+      const recommendedUSD = balanceUSD / target;
+
+      recommendations.push({
+        loanId: loan.id,
+        recommendedUSD: Math.min(recommendedUSD, remaining), // cap if it'd exceed remaining
+        reason: `Clear $${balanceUSD.toFixed(0)} in ${target} months`,
+      });
+      remaining -= Math.min(recommendedUSD, remaining);
+    }
+
+    // Step 2: send remaining to highest-interest loan
+    if (remaining > 0) {
+      // Find the highest-interest loan that has a balance
+      const interestBearingLoans = loans
+        .filter((l) => Number(l.interest_rate) > 0)
+        .sort((a, b) => Number(b.interest_rate) - Number(a.interest_rate));
+
+      if (interestBearingLoans.length > 0) {
+        const target = interestBearingLoans[0];
+        recommendations.push({
+          loanId: target.id,
+          recommendedUSD: remaining,
+          reason: `Highest interest (${target.interest_rate}%) — math optimal`,
+        });
+        remaining = 0;
+      }
+    }
+
+    const totalAllocated = recommendations.reduce((s, r) => s + r.recommendedUSD, 0);
+    return {
+      perLoan: recommendations,
+      totalAllocated,
+      unallocated: remaining,
+      infeasible: false,
+    };
+  }
+
+  const recommendation = computeRecommendation();
+  // ===== END RECOMMENDATION =====
+
+// ===== SIMULATOR MATH =====
+  // Initialize per-loan extras with calculator's surplus as default for highest-interest loan
+  const loansForSim = loans.map((loan) => {
+    const balanceNative = computeCurrentBalance(loan, payments);
+    const balanceUSD = loan.currency === "INR" ? balanceNative / inrToUsdRate : balanceNative;
+    const emiNative = Number(loan.emi_amount || 0);
+    const emiUSD = loan.currency === "INR" ? emiNative / inrToUsdRate : emiNative;
+    const monthlyRate = Number(loan.interest_rate) / 100 / 12;
+
+    // Determine simulation start: today, or EMI start date if user toggled and EMI hasn't started yet
+    let fromDate = new Date();
+    if (simulateFromEmiStart && loan.emi_start_date) {
+      const emiStart = new Date(loan.emi_start_date);
+      if (emiStart > fromDate) fromDate = emiStart;
+    }
+
+    // Determine effective EMI: $0 if EMI hasn't started yet AND user hasn't toggled "from EMI start"
+    let effectiveEmi = emiUSD;
+    if (loan.emi_start_date && !simulateFromEmiStart) {
+      const emiStart = new Date(loan.emi_start_date);
+      if (emiStart > new Date()) effectiveEmi = 0;
+    }
+
+    return { loan, balanceUSD, emiUSD: effectiveEmi, monthlyRate, fromDate };
+  }).filter(l => l.balanceUSD > 0);
+
+  // Initialize priorityOrder lazily from loansForSim
+  const effectivePriorityOrder =
+    priorityOrder.length === loansForSim.length
+      ? priorityOrder
+      : loansForSim.map((l) => l.loan.id);
+
+  // Get extra for a specific loan (Mode A) or 0 (Mode B uses budget instead)
+  const getExtraForLoan = (loanId: string): number => {
+    if (simulatorMode === "per_loan") {
+      const val = perLoanExtras[loanId];
+      // Default the highest-interest loan to surplusForBankLoan if not set
+      if (!val) {
+        const highest = [...loansForSim].sort(
+          (a, b) => Number(b.loan.interest_rate) - Number(a.loan.interest_rate)
+        )[0];
+        if (highest && highest.loan.id === loanId && surplusForBankLoan > 0) {
+          return surplusForBankLoan;
+        }
+        return 0;
+      }
+      return parseFloat(val) || 0;
+    }
+    return 0;
+  };
+
+  // Run Mode A simulation per loan
+  const modeAResults = loansForSim.map((l) => {
+    const extra = getExtraForLoan(l.loan.id);
+    const withExtra = simulateLoanPayoff({
+      startingBalanceUSD: l.balanceUSD,
+      monthlyRate: l.monthlyRate,
+      baseEmiUSD: l.emiUSD,
+      extraPerMonthUSD: extra,
+      fromDate: l.fromDate,
+    });
+    const baseline = simulateLoanPayoff({
+      startingBalanceUSD: l.balanceUSD,
+      monthlyRate: l.monthlyRate,
+      baseEmiUSD: l.emiUSD,
+      extraPerMonthUSD: 0,
+      fromDate: l.fromDate,
+    });
+    return { loanInfo: l, extra, withExtra, baseline };
+  });
+
+  // Run Mode B simulation: total budget, priority order, cascade
+  function simulateBudgetMode(budgetUSD: number, order: string[]): {
+    perLoan: { loanId: string; months: number; payoffDate: Date | null; totalInterest: number }[];
+    totalMonths: number;
+  } {
+    if (budgetUSD <= 0 || loansForSim.length === 0) {
+      return { perLoan: [], totalMonths: 0 };
+    }
+
+    // Copy initial state
+    const state = loansForSim.map((l) => ({
+      id: l.loan.id,
+      balance: l.balanceUSD,
+      rate: l.monthlyRate,
+      emi: l.emiUSD,
+      fromDate: l.fromDate,
+      interestPaid: 0,
+      monthsTaken: 0,
+      finished: false,
+    }));
+
+    const orderedIds = order.filter((id) => state.find((s) => s.id === id));
+    // Add any missing IDs at end (shouldn't happen, defensive)
+    state.forEach((s) => {
+      if (!orderedIds.includes(s.id)) orderedIds.push(s.id);
+    });
+
+    let month = 0;
+    while (state.some((s) => !s.finished) && month < 600) {
+      // Apply interest + EMI to each unfinished loan
+      state.forEach((s) => {
+        if (s.finished) return;
+        const interest = s.balance * s.rate;
+        s.interestPaid += interest;
+        s.balance = s.balance + interest - s.emi;
+        if (s.balance < 0) s.balance = 0;
+      });
+
+      // Distribute budget by priority
+      let remaining = budgetUSD;
+      for (const id of orderedIds) {
+        if (remaining <= 0) break;
+        const s = state.find((x) => x.id === id);
+        if (!s || s.finished) continue;
+        const payment = Math.min(remaining, s.balance);
+        s.balance -= payment;
+        remaining -= payment;
+      }
+
+      // Mark loans as finished if paid off
+      state.forEach((s) => {
+        if (!s.finished && s.balance <= 0) {
+          s.finished = true;
+          s.monthsTaken = month + 1;
+        }
+      });
+
+      month++;
+    }
+
+    const perLoan = state.map((s) => ({
+      loanId: s.id,
+      months: s.monthsTaken,
+      payoffDate: s.monthsTaken > 0 ? (() => {
+        const d = new Date(s.fromDate);
+        d.setMonth(d.getMonth() + s.monthsTaken);
+        return d;
+      })() : null,
+      totalInterest: s.interestPaid,
+    }));
+
+    return { perLoan, totalMonths: month };
+  }
+
+  const budgetExtraValue = parseFloat(totalBudgetExtra) || 0;
+  const modeBResults = simulatorMode === "budget"
+    ? simulateBudgetMode(budgetExtraValue, effectivePriorityOrder)
+    : { perLoan: [], totalMonths: 0 };
+  // ===== END SIMULATOR MATH =====
+
   // Compute goal totals
   const goalsWithMath = goals.map((goal) => {
     const saved = contributions
@@ -936,6 +1235,41 @@ export default function LoansClient({
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300"
               />
 
+              <div className="border border-gray-200 dark:border-gray-800 rounded-md p-3 space-y-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="force-include-check"
+                    checked={forceInclude}
+                    onChange={(e) => setForceInclude(e.target.checked)}
+                    className="cursor-pointer"
+                  />
+                  <label
+                    htmlFor="force-include-check"
+                    className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
+                  >
+                    Force include in payoff plan
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  If checked, the recommendation always allocates a monthly amount to this loan, even when math would skip it.
+                </p>
+                {forceInclude && (
+                  <div className="flex gap-3 items-center">
+                    <label className="text-xs text-gray-500 dark:text-gray-400">
+                      Target payoff in (months):
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={payoffTargetMonths}
+                      onChange={(e) => setPayoffTargetMonths(e.target.value)}
+                      className="w-24 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300"
+                    />
+                  </div>
+                )}
+              </div>
+              
               <input
                 type="text"
                 placeholder="Notes (optional)"
@@ -1189,7 +1523,373 @@ export default function LoansClient({
             </div>
           )}
         </section>
-        
+
+{/* RECOMMENDED PLAN */}
+        {loansForSim.length > 0 && (
+          <section className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6 mb-6">
+            <div className="flex justify-between items-baseline mb-2">
+              <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Recommended Plan
+              </h2>
+              {!recommendation.infeasible && recommendation.totalAllocated > 0 && (
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  ${recommendation.totalAllocated.toFixed(2)}/mo total
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              Based on your ${freePerMonth.toFixed(2)}/mo free after fixed expenses, buffer, and goals.
+            </p>
+
+            {recommendation.infeasible ? (
+              <p className="text-sm text-red-700 dark:text-red-300">
+                No free cash to allocate to loans. Income doesn't cover fixed expenses + EMIs + buffer + goal requirements.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {loansForSim.map((info) => {
+                  const rec = recommendation.perLoan.find((r) => r.loanId === info.loan.id);
+                  const recommended = rec?.recommendedUSD || 0;
+                  const overrideKey = info.loan.id;
+                  const overrideVal = recommendationOverrides[overrideKey];
+                  const actualUsed = overrideVal !== undefined && overrideVal !== ""
+                    ? parseFloat(overrideVal) || 0
+                    : recommended;
+
+                  // Run simulation with actualUsed
+                  const result = simulateLoanPayoff({
+                    startingBalanceUSD: info.balanceUSD,
+                    monthlyRate: info.monthlyRate,
+                    baseEmiUSD: info.emiUSD,
+                    extraPerMonthUSD: actualUsed,
+                    fromDate: info.fromDate,
+                  });
+
+                  const tweaked = overrideVal !== undefined && overrideVal !== "" && Math.abs(parseFloat(overrideVal) - recommended) > 0.01;
+
+                  return (
+                    <div
+                      key={info.loan.id}
+                      className="border border-gray-200 dark:border-gray-800 rounded-md p-4 space-y-3"
+                    >
+                      <div className="flex justify-between items-baseline">
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {info.loan.name}
+                          </h3>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            ${info.balanceUSD.toFixed(2)} @ {(info.monthlyRate * 12 * 100).toFixed(1)}% APR
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="bg-gray-50 dark:bg-gray-950 rounded p-3">
+                          <p className="text-gray-500 dark:text-gray-400 mb-1">Recommended</p>
+                          <p className="text-gray-900 dark:text-gray-100 font-medium">
+                            ${recommended.toFixed(2)}/mo
+                          </p>
+                          {rec && (
+                            <p className="text-gray-500 dark:text-gray-400 mt-0.5">
+                              {rec.reason}
+                            </p>
+                          )}
+                        </div>
+                        <div className={`${tweaked ? "bg-amber-50 dark:bg-amber-950/30" : "bg-gray-50 dark:bg-gray-950"} rounded p-3`}>
+                          <p className="text-gray-500 dark:text-gray-400 mb-1">
+                            Your amount {tweaked && "(tweaked)"}
+                          </p>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={overrideVal ?? ""}
+                            placeholder={recommended.toFixed(2)}
+                            onChange={(e) =>
+                              setRecommendationOverrides({
+                                ...recommendationOverrides,
+                                [overrideKey]: e.target.value,
+                              })
+                            }
+                            className="w-full px-2 py-1 border border-gray-300 dark:border-gray-700 rounded text-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300"
+                          />
+                        </div>
+                      </div>
+
+                      {result.status === "paid_off" && result.payoffDate ? (
+                        <p className="text-xs text-green-700 dark:text-green-300">
+                          Pays off <strong>{result.payoffDate.toLocaleDateString("en-US", { month: "short", year: "numeric" })}</strong>{" "}
+                          ({result.months} months){result.totalInterest > 0 && `, $${result.totalInterest.toFixed(0)} interest`}
+                        </p>
+                      ) : result.status === "interest_only" ? (
+                        <p className="text-xs text-red-600 dark:text-red-400">
+                          Amount doesn't cover interest — balance grows forever
+                        </p>
+                      ) : (
+                        <p className="text-xs text-gray-500 dark:text-gray-400">No payoff date computed</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
+
+{/* SIMULATOR */}
+        {loansForSim.length > 0 && (
+          <section className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6 mb-6">
+            <div className="flex items-baseline justify-between mb-4">
+              <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Simulator
+              </h2>
+              <div className="flex gap-1 text-xs">
+                <button
+                  onClick={() => setSimulatorMode("per_loan")}
+                  className={`px-3 py-1 rounded-md cursor-pointer ${
+                    simulatorMode === "per_loan"
+                      ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900"
+                      : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  }`}
+                >
+                  Per loan
+                </button>
+                <button
+                  onClick={() => setSimulatorMode("budget")}
+                  className={`px-3 py-1 rounded-md cursor-pointer ${
+                    simulatorMode === "budget"
+                      ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900"
+                      : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  }`}
+                >
+                  Budget mode
+                </button>
+              </div>
+            </div>
+
+            {/* Moratorium toggle */}
+            <div className="mb-4 flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                id="sim-from-emi-start"
+                checked={simulateFromEmiStart}
+                onChange={(e) => setSimulateFromEmiStart(e.target.checked)}
+                className="cursor-pointer"
+              />
+              <label
+                htmlFor="sim-from-emi-start"
+                className="text-gray-600 dark:text-gray-400 cursor-pointer"
+              >
+                Simulate from EMI start date (instead of today)
+              </label>
+            </div>
+
+            {/* Mode A: Per loan */}
+            {simulatorMode === "per_loan" && (
+              <div className="space-y-4">
+                {modeAResults.map(({ loanInfo, extra, withExtra, baseline }) => {
+                  const monthsSaved = baseline.months - withExtra.months;
+                  const interestSaved = baseline.totalInterest - withExtra.totalInterest;
+
+                  return (
+                    <div
+                      key={loanInfo.loan.id}
+                      className="border border-gray-200 dark:border-gray-800 rounded-md p-4"
+                    >
+                      <div className="flex justify-between items-baseline mb-3">
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {loanInfo.loan.name}
+                          </h3>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            ${loanInfo.balanceUSD.toFixed(2)} balance · {(loanInfo.monthlyRate * 12 * 100).toFixed(1)}% APR
+                            {loanInfo.emiUSD > 0 && ` · $${loanInfo.emiUSD.toFixed(2)} EMI`}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-3 items-center mb-3">
+                        <label className="text-xs text-gray-500 dark:text-gray-400">
+                          Extra $/mo:
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="0"
+                          value={perLoanExtras[loanInfo.loan.id] ?? (extra > 0 && !perLoanExtras[loanInfo.loan.id] ? extra.toFixed(2) : "")}
+                          onChange={(e) =>
+                            setPerLoanExtras({
+                              ...perLoanExtras,
+                              [loanInfo.loan.id]: e.target.value,
+                            })
+                          }
+                          className="w-32 px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300"
+                        />
+                      </div>
+
+                      {/* Results */}
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="bg-gray-50 dark:bg-gray-950 rounded p-3">
+                          <p className="text-gray-500 dark:text-gray-400 mb-1">Minimum only</p>
+                          {baseline.status === "paid_off" && baseline.payoffDate ? (
+                            <>
+                              <p className="text-gray-900 dark:text-gray-100 font-medium">
+                                {baseline.payoffDate.toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                              </p>
+                              <p className="text-gray-500 dark:text-gray-400 mt-0.5">
+                                {baseline.months} months · ${baseline.totalInterest.toFixed(0)} interest
+                              </p>
+                            </>
+                          ) : baseline.status === "interest_only" ? (
+                            <p className="text-red-600 dark:text-red-400">EMI doesn't cover interest</p>
+                          ) : (
+                            <p className="text-gray-500 dark:text-gray-400">No EMI / no plan</p>
+                          )}
+                        </div>
+
+                        <div className="bg-green-50 dark:bg-green-950/30 rounded p-3">
+                          <p className="text-gray-500 dark:text-gray-400 mb-1">
+                            With ${extra.toFixed(0)}/mo extra
+                          </p>
+                          {withExtra.status === "paid_off" && withExtra.payoffDate ? (
+                            <>
+                              <p className="text-gray-900 dark:text-gray-100 font-medium">
+                                {withExtra.payoffDate.toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                              </p>
+                              <p className="text-gray-500 dark:text-gray-400 mt-0.5">
+                                {withExtra.months} months · ${withExtra.totalInterest.toFixed(0)} interest
+                              </p>
+                            </>
+                          ) : withExtra.status === "interest_only" ? (
+                            <p className="text-red-600 dark:text-red-400">Still doesn't cover interest</p>
+                          ) : (
+                            <p className="text-gray-500 dark:text-gray-400">Set an amount above</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {monthsSaved > 0 && interestSaved > 0 && (
+                        <p className="text-xs text-green-700 dark:text-green-300 mt-3">
+                          Saves <strong>{monthsSaved} months</strong> and{" "}
+                          <strong>${interestSaved.toFixed(2)}</strong> in interest.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Mode B: Budget */}
+            {simulatorMode === "budget" && (
+              <div className="space-y-4">
+                <div className="flex gap-3 items-center">
+                  <label className="text-sm text-gray-700 dark:text-gray-300">
+                    Total extra $/mo:
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder={surplusForBankLoan.toFixed(2)}
+                    value={totalBudgetExtra}
+                    onChange={(e) => setTotalBudgetExtra(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Calculator suggests <strong>${surplusForBankLoan.toFixed(2)}/mo</strong> based on your surplus. Money cascades by priority order below.
+                </p>
+
+                {/* Priority list */}
+                <div>
+                  <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                    Priority order (top = paid first)
+                  </h4>
+                  <div className="space-y-1.5">
+                    {effectivePriorityOrder.map((loanId, idx) => {
+                      const info = loansForSim.find((l) => l.loan.id === loanId);
+                      const result = modeBResults.perLoan.find((r) => r.loanId === loanId);
+                      if (!info) return null;
+
+                      return (
+                        <div
+                          key={loanId}
+                          className="flex items-center gap-2 border border-gray-200 dark:border-gray-800 rounded-md p-3"
+                        >
+                          <div className="flex flex-col gap-0.5">
+                            <button
+                              onClick={() => {
+                                if (idx === 0) return;
+                                const newOrder = [...effectivePriorityOrder];
+                                [newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]];
+                                setPriorityOrder(newOrder);
+                              }}
+                              disabled={idx === 0}
+                              className="text-xs px-1 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 disabled:opacity-30 cursor-pointer"
+                            >
+                              ▲
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (idx === effectivePriorityOrder.length - 1) return;
+                                const newOrder = [...effectivePriorityOrder];
+                                [newOrder[idx], newOrder[idx + 1]] = [newOrder[idx + 1], newOrder[idx]];
+                                setPriorityOrder(newOrder);
+                              }}
+                              disabled={idx === effectivePriorityOrder.length - 1}
+                              className="text-xs px-1 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 disabled:opacity-30 cursor-pointer"
+                            >
+                              ▼
+                            </button>
+                          </div>
+
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              {idx + 1}. {info.loan.name}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              ${info.balanceUSD.toFixed(2)} @ {(info.monthlyRate * 12 * 100).toFixed(1)}% APR
+                            </p>
+                          </div>
+
+                          <div className="text-right">
+                            {result?.payoffDate ? (
+                              <>
+                                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  {result.payoffDate.toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  {result.months} months
+                                </p>
+                              </>
+                            ) : (
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                Set budget above
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {modeBResults.totalMonths > 0 && (
+                  <div className="pt-3 border-t border-gray-200 dark:border-gray-800">
+                    <p className="text-sm text-green-700 dark:text-green-300">
+                      All loans debt-free in <strong>{modeBResults.totalMonths} months</strong>{" "}
+                      ({(() => {
+                        const d = new Date();
+                        d.setMonth(d.getMonth() + modeBResults.totalMonths);
+                        return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+                      })()}).
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
         {/* GOALS HEADER */}
         <header className="mb-4 mt-12">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Goals</h2>
