@@ -18,7 +18,7 @@ export default async function IncomePage() {
     .order("display_order", { ascending: true });
 
   if (!bankAccounts || bankAccounts.length === 0) {
-    redirect("/setup");
+    redirect("/finance/setup");
   }
 
   const { data: incomes } = await supabase

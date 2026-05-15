@@ -8,7 +8,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import ThemeToggle from "./ThemeToggle";
+import ThemeToggle from "../ThemeToggle";
 
 type PaymentMethod = "Discover" | "Amex" | "Citi" | "Cash" | "Debit";
 
@@ -372,25 +372,25 @@ export default function ExpenseTracker({
           </div>
           <nav className="flex gap-4 text-xs">
             <Link
-              href="/income"
+              href="/finance/income"
               className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
             >
               Income
             </Link>
             <Link
-              href="/payments"
+              href="/finance/payments"
               className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
             >
               Payments
             </Link>
             <Link
-              href="/loans"
+              href="/finance/loans"
               className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
             >
               Loans
             </Link>
             <Link
-              href="/setup"
+              href="/finance/setup"
               className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
             >
               Setup

@@ -46,7 +46,7 @@ export default async function Home() {
   const fixedExpenses = fixedExpensesResult.data || [];
 
   if (bankAccounts.length === 0) {
-    redirect("/setup");
+    redirect("/finance/setup");
   }
 
   return (

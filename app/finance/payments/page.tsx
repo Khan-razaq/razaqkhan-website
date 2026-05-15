@@ -30,7 +30,7 @@ export default async function PaymentsPage() {
   const payments = paymentsResult.data || [];
 
   if (creditCards.length === 0 || bankAccounts.length === 0) {
-    redirect("/setup");
+    redirect("/finance/setup");
   }
 
   // Compute current "owed" per card so the form can suggest the right amount
