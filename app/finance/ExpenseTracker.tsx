@@ -115,8 +115,6 @@ function nextDueDateInfo(dueDay: number | null): { days: number; date: Date } | 
   return { days, date: dueDate };
 }
 
-// Count how many billing-day occurrences have happened for a fixed expense
-// between when it was added and today.
 function countFixedExpenseDeductions(fe: FixedExpense, today: Date): number {
   const createdAt = new Date(fe.created_at);
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -181,6 +179,10 @@ export default function ExpenseTracker({
   const [bankAccountId, setBankAccountId] = useState<string>(bankAccounts[0]?.id || "");
   const [creditCardId, setCreditCardId] = useState<string>(creditCards[0]?.id || "");
   const [error, setError] = useState<{ field: string; message: string } | null>(null);
+  const [payoffCardId, setPayoffCardId] = useState<string | null>(null);
+  const [payoffBankId, setPayoffBankId] = useState<string>("");
+  const [payoffSaving, setPayoffSaving] = useState(false);
+  const [payoffError, setPayoffError] = useState("");
 
   const isCardMethod = !BANK_METHODS.includes(paymentMethod);
   const matchingCards = isCardMethod
@@ -191,7 +193,6 @@ export default function ExpenseTracker({
   const autoMatchedCardId = matchingCards.length === 1 ? matchingCards[0].id : null;
   const showCardDropdown = isCardMethod && !autoMatchedCardId;
 
-  // Bank account balances
   const today = new Date();
   const bankBalances = bankAccounts.map((account) => {
     const incomeIn = deposits
@@ -229,7 +230,6 @@ export default function ExpenseTracker({
     return { account, balance };
   });
 
-  // Credit card balances owed
   const cardBalances = creditCards.map((card) => {
     const expensesOnCard = expenses
       .filter((e) => e.credit_card_id === card.id)
@@ -334,6 +334,53 @@ export default function ExpenseTracker({
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push("/login");
+    router.refresh();
+  };
+
+  const handleConfirmPayoff = async () => {
+    if (!payoffCardId || !payoffBankId) return;
+    setPayoffError("");
+    setPayoffSaving(true);
+
+    const card = creditCards.find((c) => c.id === payoffCardId);
+    if (!card) {
+      setPayoffSaving(false);
+      return;
+    }
+
+    const balance = cardBalances.find((cb) => cb.card.id === payoffCardId);
+    if (!balance || balance.owed <= 0) {
+      setPayoffSaving(false);
+      setPayoffCardId(null);
+      return;
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setPayoffSaving(false);
+      return;
+    }
+
+    const { error } = await supabase.from("credit_card_payments").insert({
+      user_id: user.id,
+      credit_card_id: payoffCardId,
+      bank_account_id: payoffBankId,
+      amount: balance.owed,
+      payment_date: new Date().toISOString().split("T")[0],
+      notes: "Paid off via dashboard",
+    });
+
+    if (error) {
+      setPayoffError(error.message);
+      setPayoffSaving(false);
+      return;
+    }
+
+    setPayoffSaving(false);
+    setPayoffCardId(null);
+    setPayoffBankId("");
     router.refresh();
   };
 
@@ -475,7 +522,7 @@ export default function ExpenseTracker({
             <div className="space-y-3">
               {cardBalances.map(({ card, owed, utilization }) => {
                 const dueInfo = nextDueDateInfo(card.payment_due_day);
-                const showCountdown = owed > 0 && dueInfo !== null;
+                const showCountdown = owed > 0.005 && dueInfo !== null;
                 const daysLeft = dueInfo?.days ?? null;
                 const countdownColor =
                   daysLeft !== null && daysLeft <= 2
@@ -490,7 +537,7 @@ export default function ExpenseTracker({
                 return (
                   <div key={card.id} className="space-y-1.5">
                     <div className="flex justify-between items-baseline text-sm">
-                      <div className="flex items-baseline gap-2">
+                      <div className="flex items-baseline gap-2 flex-wrap">
                         <span className="text-gray-600 dark:text-gray-400">{card.name}</span>
                         {showCountdown && (
                           <span className={`text-xs font-medium ${countdownColor}`}>
@@ -500,6 +547,18 @@ export default function ExpenseTracker({
                               ? `Due tomorrow (${dueDateLabel})`
                               : `Due ${dueDateLabel} (${daysLeft} days)`}
                           </span>
+                        )}
+                        {owed > 0.005 && (
+                          <button
+                            onClick={() => {
+                              setPayoffCardId(card.id);
+                              setPayoffBankId(bankAccounts[0]?.id || "");
+                              setPayoffError("");
+                            }}
+                            className="text-xs px-2 py-0.5 rounded border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+                          >
+                            Pay off
+                          </button>
                         )}
                       </div>
                       <span className="font-medium text-gray-900 dark:text-gray-100">
@@ -703,6 +762,61 @@ export default function ExpenseTracker({
             </div>
           )}
         </section>
+
+        {/* Pay off confirmation modal */}
+        {payoffCardId && (() => {
+          const card = creditCards.find((c) => c.id === payoffCardId);
+          const balance = cardBalances.find((cb) => cb.card.id === payoffCardId);
+          if (!card || !balance) return null;
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6 max-w-md w-full">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                  Pay off {card.name}?
+                </h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Mark ${balance.owed.toFixed(2)} as paid off. The balance will go to $0 and the amount will be deducted from your selected bank account.
+                </p>
+                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                  From bank account
+                </label>
+                <select
+                  value={payoffBankId}
+                  onChange={(e) => setPayoffBankId(e.target.value)}
+                  className="w-full px-3 py-2 mb-4 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300"
+                >
+                  {bankAccounts.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+                {payoffError && (
+                  <p className="text-xs text-red-600 dark:text-red-400 mb-3">{payoffError}</p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleConfirmPayoff}
+                    disabled={payoffSaving}
+                    className="flex-1 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 py-2 rounded-md text-sm font-medium cursor-pointer hover:bg-blue-600 dark:hover:bg-blue-500 hover:text-white transition-colors disabled:opacity-50"
+                  >
+                    {payoffSaving ? "Paying..." : "Confirm payoff"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPayoffCardId(null);
+                      setPayoffError("");
+                    }}
+                    disabled={payoffSaving}
+                    className="px-4 py-2 rounded-md text-sm font-medium border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 cursor-pointer disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </main>
   );
