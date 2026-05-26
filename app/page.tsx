@@ -22,7 +22,24 @@ export default function LandingPage() {
         }
         @keyframes drift {
           0%, 100% { transform: translate(0, 0) scale(1); }
-          50% { transform: translate(40px, -20px) scale(1.05); }
+          50% { transform: translate(80px, -50px) scale(1.1); }
+        }
+        @keyframes driftDiagonal {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(-100px, -70px) scale(1.15); }
+        }
+        @keyframes breathe {
+          0%, 100% { transform: scale(1); opacity: 0.5; }
+          50% { transform: scale(1.3); opacity: 1; }
+        }
+        .bg-drift {
+          animation: drift 8s ease-in-out infinite;
+        }
+        .bg-drift-diagonal {
+          animation: driftDiagonal 7s ease-in-out infinite;
+        }
+        .bg-breathe {
+          animation: breathe 5s ease-in-out infinite;
         }
 
         @keyframes twinkle {
@@ -69,7 +86,19 @@ export default function LandingPage() {
       {/* Background accent — drifts gently */}
       <div
         aria-hidden="true"
-        className="absolute -top-32 -right-32 w-[700px] h-[700px] rounded-full bg-teal-500/10 dark:bg-teal-400/8 blur-3xl pointer-events-none bg-drift"
+        className="absolute -top-32 -right-32 w-[700px] h-[700px] rounded-full bg-teal-500/15 dark:bg-teal-400/8 blur-3xl pointer-events-none bg-drift"
+      />
+
+      {/* Light-mode-only cloud: lower-left, drifts diagonally */}
+      <div
+        aria-hidden="true"
+        className="absolute -bottom-40 -left-40 w-[600px] h-[600px] rounded-full bg-teal-400/12 dark:bg-transparent blur-3xl pointer-events-none bg-drift-diagonal"
+      />
+
+      {/* Light-mode-only cloud: middle-right, breathes in place */}
+      <div
+        aria-hidden="true"
+        className="absolute top-1/3 -right-20 w-[400px] h-[400px] rounded-full bg-cyan-300/10 dark:bg-transparent blur-3xl pointer-events-none bg-breathe"
       />
 
       {/* Top nav — photo, hadith, projects link */}
@@ -91,12 +120,19 @@ export default function LandingPage() {
           <p className="italic text-lg text-slate-500 dark:text-slate-500 mt-1">
             &quot;The strong is the one who controls himself when angry.&quot; — Prophet Mohammad ﷺ (pbuh)          </p>
         </div>
-        <Link
-          href="/projects"
-          className="text-sm text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
-        >
-          Projects
-        </Link>
+        <div className="flex items-center gap-5 text-sm">
+          <a href="/razaq-khan-resume.pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors">
+            Resume
+          </a>
+          <Link
+            href="/projects"
+            className="text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors">
+            Projects
+          </Link>
+        </div>
       </nav>
 
       {/* Hero */}
@@ -195,6 +231,14 @@ export default function LandingPage() {
             />
           </div>
         </section>
+        
+        {/* Footer */}
+        <footer className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 py-8 text-center border-t border-slate-200 dark:border-slate-800">
+          <p className="text-xs text-slate-500 dark:text-slate-500">
+            © 2026 Razaq Khan. All rights reserved.
+          </p>
+        </footer>
+
     </main>
   );
 }
