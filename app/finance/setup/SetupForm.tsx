@@ -459,7 +459,7 @@ export default function SetupForm({
       <div className="max-w-2xl mx-auto">
         <header className="mb-8">
           <Link
-            href="/"
+            href="/finance"
             className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
           >
             ← Back to dashboard
