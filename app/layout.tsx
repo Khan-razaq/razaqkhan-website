@@ -35,10 +35,17 @@ export default function RootLayout({
             __html: `
               (function() {
                 try {
-                  var theme = localStorage.getItem('theme') || 'auto';
-                  var isDark = theme === 'on' ||
-                    (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                  var mq = window.matchMedia('(prefers-color-scheme: dark)');
+                  var getTheme = function() { return localStorage.getItem('theme') || 'auto'; };
+                  var theme = getTheme();
+                  var isDark = theme === 'on' || (theme === 'auto' && mq.matches);
                   if (isDark) document.documentElement.classList.add('dark');
+                  // Follow device light/dark changes on every page while set to auto
+                  mq.addEventListener('change', function() {
+                    try {
+                      if (getTheme() === 'auto') document.documentElement.classList.toggle('dark', mq.matches);
+                    } catch (e) {}
+                  });
                 } catch (e) {}
               })();
             `,
