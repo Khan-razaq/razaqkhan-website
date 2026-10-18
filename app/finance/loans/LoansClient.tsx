@@ -75,6 +75,12 @@ type FixedExpense = {
 
 // Compute current balance for a loan as of today.
 function computeCurrentBalance(loan: Loan, payments: LoanPayment[]): number {
+  return computeLoanState(loan, payments).balance;
+}
+
+// Current balance plus total paid so far (EMIs since start + logged payments).
+// paid + balance = principal + interest accrued to date.
+function computeLoanState(loan: Loan, payments: LoanPayment[]): { balance: number; paid: number } {
   const principal = Number(loan.original_amount);
   const rate = Number(loan.interest_rate) / 100;
   const disbursement = loan.disbursement_date ? new Date(loan.disbursement_date) : new Date();
@@ -86,7 +92,7 @@ function computeCurrentBalance(loan: Loan, payments: LoanPayment[]): number {
     .reduce((sum, p) => sum + Number(p.amount), 0);
 
   if (loan.interest_compounding === "none" || rate === 0) {
-    return Math.max(0, principal - totalPaid);
+    return { balance: Math.max(0, principal - totalPaid), paid: Math.min(totalPaid, principal) };
   }
 
   const emiStart = loan.emi_start_date ? new Date(loan.emi_start_date) : null;
@@ -97,6 +103,7 @@ function computeCurrentBalance(loan: Loan, payments: LoanPayment[]): number {
   );
 
   let balance = principal;
+  let paid = 0;
   if (loan.interest_compounding === "daily") {
     balance = principal * Math.pow(1 + rate / 365, daysPhase1);
   } else if (loan.interest_compounding === "monthly") {
@@ -115,13 +122,16 @@ function computeCurrentBalance(loan: Loan, payments: LoanPayment[]): number {
     const emi = Number(loan.emi_amount) || 0;
 
     for (let i = 0; i < monthsSinceEMI; i++) {
-      balance = balance * (1 + monthlyRate) - emi;
+      balance = balance * (1 + monthlyRate);
+      paid += Math.min(emi, balance);
+      balance -= emi;
       if (balance < 0) balance = 0;
     }
   }
 
+  paid += Math.min(totalPaid, balance);
   balance -= totalPaid;
-  return Math.max(0, balance);
+  return { balance: Math.max(0, balance), paid };
 }
 
 function projectedPayoffDate(loan: Loan, currentBalance: number): Date | null {
@@ -656,10 +666,11 @@ export default function LoansClient({
 
   // Compute loan math
   const loansWithMath = loans.map((loan) => {
-    const balance = computeCurrentBalance(loan, payments);
+    const { balance, paid } = computeLoanState(loan, payments);
     const balanceUSD = toUSD(balance, loan.currency);
     const payoffDate = projectedPayoffDate(loan, balance);
-    return { loan, balance, balanceUSD, payoffDate };
+    const percentPaid = paid + balance > 0 ? (paid / (paid + balance)) * 100 : 0;
+    return { loan, balance, balanceUSD, payoffDate, paid, percentPaid };
   });
 
   const totalDebtUSD = loansWithMath.reduce((sum, l) => sum + l.balanceUSD, 0);
@@ -985,7 +996,7 @@ export default function LoansClient({
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
-            {loansWithMath.map(({ loan, balance, balanceUSD, payoffDate }) => (
+            {loansWithMath.map(({ loan, balance, balanceUSD, payoffDate, paid, percentPaid }) => (
               <section
                 key={loan.id}
                 className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6"
@@ -1034,6 +1045,20 @@ export default function LoansClient({
                         </span>
                       )}
                     </span>
+                  </div>
+
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500 dark:text-gray-400">Paid off</span>
+                    <span className="text-gray-700 dark:text-gray-300">
+                      {formatCurrency(paid, loan.currency)}{" "}
+                      <span className="text-xs text-gray-400 dark:text-gray-500">({percentPaid.toFixed(1)}%)</span>
+                    </span>
+                  </div>
+                  <div className="bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden" style={{ height: "6px" }}>
+                    <div
+                      className="bg-green-500 transition-all"
+                      style={{ width: `${percentPaid}%`, height: "100%" }}
+                    />
                   </div>
 
                   {loan.emi_amount && (
