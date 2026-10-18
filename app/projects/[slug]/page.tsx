@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { projects } from "@/lib/projects";
@@ -127,10 +128,13 @@ export default async function ProjectPage({
           <section className="mb-12 space-y-6">
             {project.visuals.map((visual, idx) => (
               <figure key={idx}>
-                <img
+                <Image
                   src={visual.src}
                   alt={visual.alt}
-                  className="w-full rounded-lg border border-slate-200 dark:border-slate-800"
+                  width={visual.width}
+                  height={visual.height}
+                  sizes="(min-width: 896px) 800px, 100vw"
+                  className="w-full h-auto rounded-lg border border-slate-200 dark:border-slate-800"
                 />
                 {visual.caption && (
                   <figcaption className="mt-2 text-sm text-slate-500 dark:text-slate-400 italic">

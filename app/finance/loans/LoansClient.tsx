@@ -1416,7 +1416,7 @@ export default function LoansClient({
             )}
             {planStatus === "infeasible" && (
               <p className="text-sm text-red-700 dark:text-red-300 mt-4">
-                Shortfall of <strong>${shortfall.toFixed(2)}/month</strong>. Goals can't all be met at this pace.
+                Shortfall of <strong>${shortfall.toFixed(2)}/month</strong>. Goals can&apos;t all be met at this pace.
               </p>
             )}
 
@@ -1631,7 +1631,7 @@ export default function LoansClient({
                           </p>
                         ) : result.status === "interest_only" ? (
                           <p className="text-xs text-red-600 dark:text-red-400">
-                            Amount doesn't cover interest — balance grows forever
+                            Amount doesn&apos;t cover interest — balance grows forever
                           </p>
                         ) : (
                           <p className="text-xs text-gray-500 dark:text-gray-400">No payoff date computed</p>

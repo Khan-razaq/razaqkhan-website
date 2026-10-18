@@ -3,6 +3,8 @@ export type ProjectStatus = "live" | "in-progress" | "planned";
 export type ProjectVisual = {
   src: string; // path to image in /public/projects/
   alt: string;
+  width: number; // intrinsic size in pixels, used for aspect ratio
+  height: number;
   caption?: string;
 };
 

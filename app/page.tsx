@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { Mail } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -103,9 +104,12 @@ export default function LandingPage() {
 
       {/* Top nav — photo, hadith, projects link */}
       <nav className="relative z-10 grid grid-cols-[auto_1fr] md:grid-cols-[auto_1fr_auto] items-center gap-4 px-6 md:px-12 py-10">
-        <img
+        <Image
           src="/me.jpeg"
           alt="Razaq Khan"
+          width={120}
+          height={120}
+          loading="eager"
           className="w-30 h-30 rounded-full object-cover object-top border border-slate-200 dark:border-slate-800"
         />
         <div className="col-span-2 md:col-span-1 order-last md:order-none text-center">

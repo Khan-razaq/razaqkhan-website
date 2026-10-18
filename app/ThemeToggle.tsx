@@ -1,18 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 type Theme = "auto" | "on" | "off";
 
-export default function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>("auto");
-  const [mounted, setMounted] = useState(false);
+const noopSubscribe = () => () => {};
 
-  useEffect(() => {
-    const saved = (localStorage.getItem("theme") as Theme) || "auto";
-    setTheme(saved);
-    setMounted(true);
-  }, []);
+export default function ThemeToggle() {
+  // false during server render and hydration, true once running in the browser
+  const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
+  const [theme, setTheme] = useState<Theme>(() =>
+    typeof window === "undefined"
+      ? "auto"
+      : (localStorage.getItem("theme") as Theme) || "auto"
+  );
 
   useEffect(() => {
     if (!mounted) return;

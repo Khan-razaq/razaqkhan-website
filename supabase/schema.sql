@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict nq6z0y34ORMabZ0lO66BC8JLxQb5LbpZbVEsUoBGC7N4BifDF7fRg4gMbFAEj5q
+\restrict cbRRdzvXkEiAYZ9bPraHeBVRzbeEAxJAcqdOmDQThbd4z9aC5pjhtATxsLLkuhm
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.11
@@ -716,337 +716,379 @@ ALTER TABLE ONLY public.user_settings
 -- Name: bank_accounts Users can delete own bank accounts; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete own bank accounts" ON public.bank_accounts FOR DELETE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can delete own bank accounts" ON public.bank_accounts FOR DELETE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: credit_card_payments Users can delete own card payments; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete own card payments" ON public.credit_card_payments FOR DELETE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can delete own card payments" ON public.credit_card_payments FOR DELETE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: savings_contributions Users can delete own contributions; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete own contributions" ON public.savings_contributions FOR DELETE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can delete own contributions" ON public.savings_contributions FOR DELETE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: credit_cards Users can delete own credit cards; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete own credit cards" ON public.credit_cards FOR DELETE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can delete own credit cards" ON public.credit_cards FOR DELETE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: expenses Users can delete own expenses; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete own expenses" ON public.expenses FOR DELETE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can delete own expenses" ON public.expenses FOR DELETE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: fixed_expenses Users can delete own fixed expenses; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete own fixed expenses" ON public.fixed_expenses FOR DELETE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can delete own fixed expenses" ON public.fixed_expenses FOR DELETE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: income_deposits Users can delete own income deposits; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete own income deposits" ON public.income_deposits FOR DELETE USING ((EXISTS ( SELECT 1
+CREATE POLICY "Users can delete own income deposits" ON public.income_deposits FOR DELETE TO authenticated USING ((EXISTS ( SELECT 1
    FROM public.incomes
-  WHERE ((incomes.id = income_deposits.income_id) AND (incomes.user_id = auth.uid())))));
+  WHERE ((incomes.id = income_deposits.income_id) AND (incomes.user_id = ( SELECT auth.uid() AS uid))))));
 
 
 --
 -- Name: incomes Users can delete own incomes; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete own incomes" ON public.incomes FOR DELETE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can delete own incomes" ON public.incomes FOR DELETE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: loan_payments Users can delete own loan payments; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete own loan payments" ON public.loan_payments FOR DELETE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can delete own loan payments" ON public.loan_payments FOR DELETE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: loans Users can delete own loans; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete own loans" ON public.loans FOR DELETE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can delete own loans" ON public.loans FOR DELETE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: savings_goals Users can delete own savings goals; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete own savings goals" ON public.savings_goals FOR DELETE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can delete own savings goals" ON public.savings_goals FOR DELETE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: bank_accounts Users can insert own bank accounts; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert own bank accounts" ON public.bank_accounts FOR INSERT WITH CHECK ((auth.uid() = user_id));
+CREATE POLICY "Users can insert own bank accounts" ON public.bank_accounts FOR INSERT TO authenticated WITH CHECK ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: credit_card_payments Users can insert own card payments; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert own card payments" ON public.credit_card_payments FOR INSERT WITH CHECK ((auth.uid() = user_id));
+CREATE POLICY "Users can insert own card payments" ON public.credit_card_payments FOR INSERT TO authenticated WITH CHECK (((( SELECT auth.uid() AS uid) = user_id) AND (EXISTS ( SELECT 1
+   FROM public.credit_cards c
+  WHERE ((c.id = credit_card_payments.credit_card_id) AND (c.user_id = ( SELECT auth.uid() AS uid))))) AND (EXISTS ( SELECT 1
+   FROM public.bank_accounts b
+  WHERE ((b.id = credit_card_payments.bank_account_id) AND (b.user_id = ( SELECT auth.uid() AS uid)))))));
 
 
 --
 -- Name: savings_contributions Users can insert own contributions; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert own contributions" ON public.savings_contributions FOR INSERT WITH CHECK ((auth.uid() = user_id));
+CREATE POLICY "Users can insert own contributions" ON public.savings_contributions FOR INSERT TO authenticated WITH CHECK (((( SELECT auth.uid() AS uid) = user_id) AND (EXISTS ( SELECT 1
+   FROM public.savings_goals g
+  WHERE ((g.id = savings_contributions.goal_id) AND (g.user_id = ( SELECT auth.uid() AS uid))))) AND (EXISTS ( SELECT 1
+   FROM public.bank_accounts b
+  WHERE ((b.id = savings_contributions.bank_account_id) AND (b.user_id = ( SELECT auth.uid() AS uid)))))));
 
 
 --
 -- Name: credit_cards Users can insert own credit cards; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert own credit cards" ON public.credit_cards FOR INSERT WITH CHECK ((auth.uid() = user_id));
+CREATE POLICY "Users can insert own credit cards" ON public.credit_cards FOR INSERT TO authenticated WITH CHECK ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: expenses Users can insert own expenses; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert own expenses" ON public.expenses FOR INSERT WITH CHECK ((auth.uid() = user_id));
+CREATE POLICY "Users can insert own expenses" ON public.expenses FOR INSERT TO authenticated WITH CHECK (((( SELECT auth.uid() AS uid) = user_id) AND ((bank_account_id IS NULL) OR (EXISTS ( SELECT 1
+   FROM public.bank_accounts b
+  WHERE ((b.id = expenses.bank_account_id) AND (b.user_id = ( SELECT auth.uid() AS uid)))))) AND ((credit_card_id IS NULL) OR (EXISTS ( SELECT 1
+   FROM public.credit_cards c
+  WHERE ((c.id = expenses.credit_card_id) AND (c.user_id = ( SELECT auth.uid() AS uid))))))));
 
 
 --
 -- Name: fixed_expenses Users can insert own fixed expenses; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert own fixed expenses" ON public.fixed_expenses FOR INSERT WITH CHECK ((auth.uid() = user_id));
+CREATE POLICY "Users can insert own fixed expenses" ON public.fixed_expenses FOR INSERT TO authenticated WITH CHECK (((( SELECT auth.uid() AS uid) = user_id) AND (EXISTS ( SELECT 1
+   FROM public.bank_accounts b
+  WHERE ((b.id = fixed_expenses.bank_account_id) AND (b.user_id = ( SELECT auth.uid() AS uid)))))));
 
 
 --
 -- Name: income_deposits Users can insert own income deposits; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert own income deposits" ON public.income_deposits FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
-   FROM public.incomes
-  WHERE ((incomes.id = income_deposits.income_id) AND (incomes.user_id = auth.uid())))));
+CREATE POLICY "Users can insert own income deposits" ON public.income_deposits FOR INSERT TO authenticated WITH CHECK (((EXISTS ( SELECT 1
+   FROM public.incomes i
+  WHERE ((i.id = income_deposits.income_id) AND (i.user_id = ( SELECT auth.uid() AS uid))))) AND (EXISTS ( SELECT 1
+   FROM public.bank_accounts b
+  WHERE ((b.id = income_deposits.bank_account_id) AND (b.user_id = ( SELECT auth.uid() AS uid)))))));
 
 
 --
 -- Name: incomes Users can insert own incomes; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert own incomes" ON public.incomes FOR INSERT WITH CHECK ((auth.uid() = user_id));
+CREATE POLICY "Users can insert own incomes" ON public.incomes FOR INSERT TO authenticated WITH CHECK ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: loan_payments Users can insert own loan payments; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert own loan payments" ON public.loan_payments FOR INSERT WITH CHECK ((auth.uid() = user_id));
+CREATE POLICY "Users can insert own loan payments" ON public.loan_payments FOR INSERT TO authenticated WITH CHECK (((( SELECT auth.uid() AS uid) = user_id) AND (EXISTS ( SELECT 1
+   FROM public.loans l
+  WHERE ((l.id = loan_payments.loan_id) AND (l.user_id = ( SELECT auth.uid() AS uid))))) AND (EXISTS ( SELECT 1
+   FROM public.bank_accounts b
+  WHERE ((b.id = loan_payments.bank_account_id) AND (b.user_id = ( SELECT auth.uid() AS uid)))))));
 
 
 --
 -- Name: loans Users can insert own loans; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert own loans" ON public.loans FOR INSERT WITH CHECK ((auth.uid() = user_id));
+CREATE POLICY "Users can insert own loans" ON public.loans FOR INSERT TO authenticated WITH CHECK ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: savings_goals Users can insert own savings goals; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert own savings goals" ON public.savings_goals FOR INSERT WITH CHECK ((auth.uid() = user_id));
+CREATE POLICY "Users can insert own savings goals" ON public.savings_goals FOR INSERT TO authenticated WITH CHECK ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: user_settings Users can insert own settings; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert own settings" ON public.user_settings FOR INSERT WITH CHECK ((auth.uid() = user_id));
+CREATE POLICY "Users can insert own settings" ON public.user_settings FOR INSERT TO authenticated WITH CHECK ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: bank_accounts Users can update own bank accounts; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update own bank accounts" ON public.bank_accounts FOR UPDATE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can update own bank accounts" ON public.bank_accounts FOR UPDATE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: credit_card_payments Users can update own card payments; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update own card payments" ON public.credit_card_payments FOR UPDATE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can update own card payments" ON public.credit_card_payments FOR UPDATE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id)) WITH CHECK (((( SELECT auth.uid() AS uid) = user_id) AND (EXISTS ( SELECT 1
+   FROM public.credit_cards c
+  WHERE ((c.id = credit_card_payments.credit_card_id) AND (c.user_id = ( SELECT auth.uid() AS uid))))) AND (EXISTS ( SELECT 1
+   FROM public.bank_accounts b
+  WHERE ((b.id = credit_card_payments.bank_account_id) AND (b.user_id = ( SELECT auth.uid() AS uid)))))));
 
 
 --
 -- Name: savings_contributions Users can update own contributions; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update own contributions" ON public.savings_contributions FOR UPDATE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can update own contributions" ON public.savings_contributions FOR UPDATE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id)) WITH CHECK (((( SELECT auth.uid() AS uid) = user_id) AND (EXISTS ( SELECT 1
+   FROM public.savings_goals g
+  WHERE ((g.id = savings_contributions.goal_id) AND (g.user_id = ( SELECT auth.uid() AS uid))))) AND (EXISTS ( SELECT 1
+   FROM public.bank_accounts b
+  WHERE ((b.id = savings_contributions.bank_account_id) AND (b.user_id = ( SELECT auth.uid() AS uid)))))));
 
 
 --
 -- Name: credit_cards Users can update own credit cards; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update own credit cards" ON public.credit_cards FOR UPDATE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can update own credit cards" ON public.credit_cards FOR UPDATE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: expenses Users can update own expenses; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update own expenses" ON public.expenses FOR UPDATE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can update own expenses" ON public.expenses FOR UPDATE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id)) WITH CHECK (((( SELECT auth.uid() AS uid) = user_id) AND ((bank_account_id IS NULL) OR (EXISTS ( SELECT 1
+   FROM public.bank_accounts b
+  WHERE ((b.id = expenses.bank_account_id) AND (b.user_id = ( SELECT auth.uid() AS uid)))))) AND ((credit_card_id IS NULL) OR (EXISTS ( SELECT 1
+   FROM public.credit_cards c
+  WHERE ((c.id = expenses.credit_card_id) AND (c.user_id = ( SELECT auth.uid() AS uid))))))));
 
 
 --
 -- Name: fixed_expenses Users can update own fixed expenses; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update own fixed expenses" ON public.fixed_expenses FOR UPDATE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can update own fixed expenses" ON public.fixed_expenses FOR UPDATE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id)) WITH CHECK (((( SELECT auth.uid() AS uid) = user_id) AND (EXISTS ( SELECT 1
+   FROM public.bank_accounts b
+  WHERE ((b.id = fixed_expenses.bank_account_id) AND (b.user_id = ( SELECT auth.uid() AS uid)))))));
 
 
 --
 -- Name: income_deposits Users can update own income deposits; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update own income deposits" ON public.income_deposits FOR UPDATE USING ((EXISTS ( SELECT 1
+CREATE POLICY "Users can update own income deposits" ON public.income_deposits FOR UPDATE TO authenticated USING ((EXISTS ( SELECT 1
    FROM public.incomes
-  WHERE ((incomes.id = income_deposits.income_id) AND (incomes.user_id = auth.uid())))));
+  WHERE ((incomes.id = income_deposits.income_id) AND (incomes.user_id = ( SELECT auth.uid() AS uid)))))) WITH CHECK (((EXISTS ( SELECT 1
+   FROM public.incomes i
+  WHERE ((i.id = income_deposits.income_id) AND (i.user_id = ( SELECT auth.uid() AS uid))))) AND (EXISTS ( SELECT 1
+   FROM public.bank_accounts b
+  WHERE ((b.id = income_deposits.bank_account_id) AND (b.user_id = ( SELECT auth.uid() AS uid)))))));
 
 
 --
 -- Name: incomes Users can update own incomes; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update own incomes" ON public.incomes FOR UPDATE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can update own incomes" ON public.incomes FOR UPDATE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: loan_payments Users can update own loan payments; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update own loan payments" ON public.loan_payments FOR UPDATE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can update own loan payments" ON public.loan_payments FOR UPDATE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id)) WITH CHECK (((( SELECT auth.uid() AS uid) = user_id) AND (EXISTS ( SELECT 1
+   FROM public.loans l
+  WHERE ((l.id = loan_payments.loan_id) AND (l.user_id = ( SELECT auth.uid() AS uid))))) AND (EXISTS ( SELECT 1
+   FROM public.bank_accounts b
+  WHERE ((b.id = loan_payments.bank_account_id) AND (b.user_id = ( SELECT auth.uid() AS uid)))))));
 
 
 --
 -- Name: loans Users can update own loans; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update own loans" ON public.loans FOR UPDATE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can update own loans" ON public.loans FOR UPDATE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: savings_goals Users can update own savings goals; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update own savings goals" ON public.savings_goals FOR UPDATE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can update own savings goals" ON public.savings_goals FOR UPDATE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: user_settings Users can update own settings; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update own settings" ON public.user_settings FOR UPDATE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can update own settings" ON public.user_settings FOR UPDATE TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: bank_accounts Users can view own bank accounts; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view own bank accounts" ON public.bank_accounts FOR SELECT USING ((auth.uid() = user_id));
+CREATE POLICY "Users can view own bank accounts" ON public.bank_accounts FOR SELECT TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: credit_card_payments Users can view own card payments; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view own card payments" ON public.credit_card_payments FOR SELECT USING ((auth.uid() = user_id));
+CREATE POLICY "Users can view own card payments" ON public.credit_card_payments FOR SELECT TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: savings_contributions Users can view own contributions; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view own contributions" ON public.savings_contributions FOR SELECT USING ((auth.uid() = user_id));
+CREATE POLICY "Users can view own contributions" ON public.savings_contributions FOR SELECT TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: credit_cards Users can view own credit cards; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view own credit cards" ON public.credit_cards FOR SELECT USING ((auth.uid() = user_id));
+CREATE POLICY "Users can view own credit cards" ON public.credit_cards FOR SELECT TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: expenses Users can view own expenses; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view own expenses" ON public.expenses FOR SELECT USING ((auth.uid() = user_id));
+CREATE POLICY "Users can view own expenses" ON public.expenses FOR SELECT TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: fixed_expenses Users can view own fixed expenses; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view own fixed expenses" ON public.fixed_expenses FOR SELECT USING ((auth.uid() = user_id));
+CREATE POLICY "Users can view own fixed expenses" ON public.fixed_expenses FOR SELECT TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: income_deposits Users can view own income deposits; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view own income deposits" ON public.income_deposits FOR SELECT USING ((EXISTS ( SELECT 1
+CREATE POLICY "Users can view own income deposits" ON public.income_deposits FOR SELECT TO authenticated USING ((EXISTS ( SELECT 1
    FROM public.incomes
-  WHERE ((incomes.id = income_deposits.income_id) AND (incomes.user_id = auth.uid())))));
+  WHERE ((incomes.id = income_deposits.income_id) AND (incomes.user_id = ( SELECT auth.uid() AS uid))))));
 
 
 --
 -- Name: incomes Users can view own incomes; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view own incomes" ON public.incomes FOR SELECT USING ((auth.uid() = user_id));
+CREATE POLICY "Users can view own incomes" ON public.incomes FOR SELECT TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: loan_payments Users can view own loan payments; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view own loan payments" ON public.loan_payments FOR SELECT USING ((auth.uid() = user_id));
+CREATE POLICY "Users can view own loan payments" ON public.loan_payments FOR SELECT TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: loans Users can view own loans; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view own loans" ON public.loans FOR SELECT USING ((auth.uid() = user_id));
+CREATE POLICY "Users can view own loans" ON public.loans FOR SELECT TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: savings_goals Users can view own savings goals; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view own savings goals" ON public.savings_goals FOR SELECT USING ((auth.uid() = user_id));
+CREATE POLICY "Users can view own savings goals" ON public.savings_goals FOR SELECT TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: user_settings Users can view own settings; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view own settings" ON public.user_settings FOR SELECT USING ((auth.uid() = user_id));
+CREATE POLICY "Users can view own settings" ON public.user_settings FOR SELECT TO authenticated USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
@@ -1135,8 +1177,7 @@ GRANT USAGE ON SCHEMA public TO service_role;
 -- Name: TABLE bank_accounts; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.bank_accounts TO anon;
-GRANT ALL ON TABLE public.bank_accounts TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.bank_accounts TO authenticated;
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.bank_accounts TO service_role;
 
 
@@ -1144,8 +1185,7 @@ GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.bank_accounts TO serv
 -- Name: TABLE credit_card_payments; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.credit_card_payments TO anon;
-GRANT ALL ON TABLE public.credit_card_payments TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.credit_card_payments TO authenticated;
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.credit_card_payments TO service_role;
 
 
@@ -1153,8 +1193,7 @@ GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.credit_card_payments 
 -- Name: TABLE credit_cards; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.credit_cards TO anon;
-GRANT ALL ON TABLE public.credit_cards TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.credit_cards TO authenticated;
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.credit_cards TO service_role;
 
 
@@ -1162,8 +1201,7 @@ GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.credit_cards TO servi
 -- Name: TABLE expenses; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.expenses TO anon;
-GRANT ALL ON TABLE public.expenses TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.expenses TO authenticated;
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.expenses TO service_role;
 
 
@@ -1171,8 +1209,7 @@ GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.expenses TO service_r
 -- Name: TABLE fixed_expenses; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.fixed_expenses TO anon;
-GRANT ALL ON TABLE public.fixed_expenses TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.fixed_expenses TO authenticated;
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.fixed_expenses TO service_role;
 
 
@@ -1180,8 +1217,7 @@ GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.fixed_expenses TO ser
 -- Name: TABLE income_deposits; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.income_deposits TO anon;
-GRANT ALL ON TABLE public.income_deposits TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.income_deposits TO authenticated;
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.income_deposits TO service_role;
 
 
@@ -1189,8 +1225,7 @@ GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.income_deposits TO se
 -- Name: TABLE incomes; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.incomes TO anon;
-GRANT ALL ON TABLE public.incomes TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.incomes TO authenticated;
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.incomes TO service_role;
 
 
@@ -1198,8 +1233,7 @@ GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.incomes TO service_ro
 -- Name: TABLE loan_payments; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.loan_payments TO anon;
-GRANT ALL ON TABLE public.loan_payments TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.loan_payments TO authenticated;
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.loan_payments TO service_role;
 
 
@@ -1207,8 +1241,7 @@ GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.loan_payments TO serv
 -- Name: TABLE loans; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.loans TO anon;
-GRANT ALL ON TABLE public.loans TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.loans TO authenticated;
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.loans TO service_role;
 
 
@@ -1216,8 +1249,7 @@ GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.loans TO service_role
 -- Name: TABLE savings_contributions; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.savings_contributions TO anon;
-GRANT ALL ON TABLE public.savings_contributions TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.savings_contributions TO authenticated;
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.savings_contributions TO service_role;
 
 
@@ -1225,8 +1257,7 @@ GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.savings_contributions
 -- Name: TABLE savings_goals; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.savings_goals TO anon;
-GRANT ALL ON TABLE public.savings_goals TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.savings_goals TO authenticated;
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.savings_goals TO service_role;
 
 
@@ -1234,8 +1265,7 @@ GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.savings_goals TO serv
 -- Name: TABLE user_settings; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.user_settings TO anon;
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE public.user_settings TO authenticated;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.user_settings TO authenticated;
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.user_settings TO service_role;
 
 
@@ -1297,5 +1327,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON T
 -- PostgreSQL database dump complete
 --
 
-\unrestrict nq6z0y34ORMabZ0lO66BC8JLxQb5LbpZbVEsUoBGC7N4BifDF7fRg4gMbFAEj5q
+\unrestrict cbRRdzvXkEiAYZ9bPraHeBVRzbeEAxJAcqdOmDQThbd4z9aC5pjhtATxsLLkuhm
 

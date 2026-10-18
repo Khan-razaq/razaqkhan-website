@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -25,6 +25,11 @@ type Payment = {
   notes: string | null;
 };
 
+const owedAmount = (cards: CreditCard[], cardId: string) => {
+  const card = cards.find((c) => c.id === cardId);
+  return card && card.current_owed > 0 ? card.current_owed.toFixed(2) : "";
+};
+
 export default function PaymentsForm({
   bankAccounts,
   creditCards,
@@ -39,22 +44,19 @@ export default function PaymentsForm({
 
   const [creditCardId, setCreditCardId] = useState(creditCards[0]?.id || "");
   const [bankAccountId, setBankAccountId] = useState(bankAccounts[0]?.id || "");
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] = useState(() => owedAmount(creditCards, creditCardId));
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
   const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [payments, setPayments] = useState<Payment[]>(initialPayments);
 
-  // When user picks a card, auto-fill amount with current owed balance
-  useEffect(() => {
-    const card = creditCards.find((c) => c.id === creditCardId);
-    if (card && card.current_owed > 0) {
-      setAmount(card.current_owed.toFixed(2));
-    } else {
-      setAmount("");
-    }
-  }, [creditCardId, creditCards]);
+  // When user picks a card (or balances refresh), auto-fill amount with current owed balance
+  const [prefilledFor, setPrefilledFor] = useState({ creditCardId, creditCards });
+  if (prefilledFor.creditCardId !== creditCardId || prefilledFor.creditCards !== creditCards) {
+    setPrefilledFor({ creditCardId, creditCards });
+    setAmount(owedAmount(creditCards, creditCardId));
+  }
 
   const selectedCard = creditCards.find((c) => c.id === creditCardId);
   const parsedAmount = parseFloat(amount) || 0;
