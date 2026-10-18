@@ -102,13 +102,13 @@ export default function LandingPage() {
       />
 
       {/* Top nav — photo, hadith, projects link */}
-      <nav className="relative z-10 grid grid-cols-[auto_1fr_auto] items-center gap-4 px-6 md:px-12 py-10">
+        <nav className="relative z-10 grid grid-cols-[auto_1fr] md:grid-cols-[auto_1fr_auto] items-center gap-4 px-6 md:px-12 py-10">
         <img
           src="/me.jpeg"
           alt="Razaq Khan"
           className="w-30 h-30 rounded-full object-cover object-top border border-slate-200 dark:border-slate-800"
         />
-        <div className="hidden md:block text-center">
+          <div className="col-span-2 md:col-span-1 order-last md:order-none text-center">
           <p
             className="text-xl text-slate-700 dark:text-slate-300 leading-tight"
             dir="rtl"
