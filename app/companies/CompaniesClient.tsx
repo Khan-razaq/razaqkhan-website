@@ -56,7 +56,13 @@ export default function CompaniesClient({ companies }: { companies: Company[] })
 
   const [input, setInput] = useState("");
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{
+    kind: "ok" | "error";
+    text: string;
+    // Set while the just-saved company is being looked up
+    companyId?: string;
+    name?: string;
+  } | null>(null);
   const [filter, setFilter] = useState<"all" | "needs_review">("all");
   const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -99,10 +105,11 @@ export default function CompaniesClient({ companies }: { companies: Company[] })
       return;
     }
     setInput("");
-    setMessage({
-      kind: "ok",
-      text: result.duplicate ? `${result.name} is already saved.` : `Saved ${result.name}. Looking it up…`,
-    });
+    setMessage(
+      result.duplicate
+        ? { kind: "ok", text: `${result.name} is already saved.` }
+        : { kind: "ok", text: `Saved ${result.name}. Looking it up…`, companyId: result.id, name: result.name }
+    );
     router.refresh();
   };
 
@@ -199,7 +206,9 @@ export default function CompaniesClient({ companies }: { companies: Company[] })
                   message.kind === "ok" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
                 }`}
               >
-                {message.text}
+                {message.companyId && companies.some((c) => c.id === message.companyId && c.status !== "pending")
+                  ? `Done: ${message.name} is in the list below.`
+                  : message.text}
               </p>
             )}
           </form>
@@ -460,7 +469,8 @@ function CaptureHelp() {
   useEffect(() => {
     if (!origin) return;
     // React refuses javascript: URLs in JSX, so set the bookmarklet directly.
-    const code = `javascript:(function(){window.open('${origin}/companies/add?close=1&url='+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title),'_blank','width=420,height=320')})()`;
+    // A highlighted name is saved by name; otherwise the page's link is saved.
+    const code = `javascript:(function(){var s=String(window.getSelection()).trim();var q=s?'text='+encodeURIComponent(s):'url='+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title);window.open('${origin}/companies/add?close=1&'+q,'_blank','width=420,height=320')})()`;
     bookmarkletRef.current?.setAttribute("href", code);
   }, [origin]);
 
@@ -474,48 +484,81 @@ function CaptureHelp() {
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
             Android
           </h3>
-          <p>
-            In Chrome, open this page and choose <b>⋮ → Add to Home screen → Install</b>. &quot;Companies&quot; then
-            shows up in the share sheet: in the LinkedIn app, tap <b>Share → Companies</b> on a company page, or
-            long-press a company name in a post, select it, and tap <b>Share → Companies</b>.
-          </p>
+          <p className="font-medium text-gray-900 dark:text-gray-100">Set up once:</p>
+          <ol className="list-decimal pl-5 mt-1 space-y-1">
+            <li>Open this page in Chrome on your phone.</li>
+            <li>
+              Tap <b>⋮</b> (top right), then <b>Add to Home screen</b>, then <b>Install</b>.
+            </li>
+          </ol>
+          <p className="font-medium text-gray-900 dark:text-gray-100 mt-3">Then, in the LinkedIn app:</p>
+          <ul className="list-disc pl-5 mt-1 space-y-1">
+            <li>
+              On a company&apos;s page: tap <b>Share</b>, then <b>Companies</b>.
+            </li>
+            <li>
+              Name in a post: press and hold the name to select it, tap <b>Share</b>, then <b>Companies</b>.
+            </li>
+          </ul>
         </div>
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
             iPhone
           </h3>
-          <p>
-            In the Shortcuts app, make a shortcut that receives <b>URLs and Text</b> from the share sheet, with one
-            action: <b>Open URLs</b> →{" "}
-            <code className="text-xs break-all bg-gray-100 dark:bg-gray-800 px-1 rounded">
-              {origin || "https://your-site"}/companies/add?url=
-            </code>
-            followed by <b>Shortcut Input</b> (turn on &quot;Show in Share Sheet&quot;). Then in LinkedIn tap{" "}
-            <b>Share → your shortcut</b>. Or tap <b>Copy link</b> and use <b>Paste &amp; save</b> above.
-          </p>
+          <p className="font-medium text-gray-900 dark:text-gray-100">Set up once, in the Shortcuts app:</p>
+          <ol className="list-decimal pl-5 mt-1 space-y-1">
+            <li>
+              Tap <b>+</b> to make a new shortcut and name it <b>Save company</b>.
+            </li>
+            <li>
+              Tap the <b>ⓘ</b> button and turn on <b>Show in Share Sheet</b>.
+            </li>
+            <li>
+              Add the action <b>Open URLs</b> and type{" "}
+              <code className="text-xs break-all bg-gray-100 dark:bg-gray-800 px-1 rounded">
+                {origin || "https://your-site"}/companies/add?url=
+              </code>{" "}
+              then tap the variable button and pick <b>Shortcut Input</b> right after it.
+            </li>
+          </ol>
+          <p className="font-medium text-gray-900 dark:text-gray-100 mt-3">Then, in the LinkedIn app:</p>
+          <ul className="list-disc pl-5 mt-1 space-y-1">
+            <li>
+              On a company&apos;s page: tap <b>Share</b>, then <b>Save company</b>.
+            </li>
+          </ul>
         </div>
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
             Laptop
           </h3>
-          <p>
-            Drag this to your bookmarks bar:{" "}
-            <a
-              ref={bookmarkletRef}
-              href="#"
-              onClick={(e) => e.preventDefault()}
-              className="inline-block px-2 py-0.5 rounded border border-gray-300 dark:border-gray-700 font-medium"
-            >
-              + Save company
-            </a>
-            . Click it on a LinkedIn company page (or a company&apos;s website) to save it.
-          </p>
-          <p className="mt-2">
-            For a keyboard shortcut (<b>Alt+Shift+S</b>), right-click &quot;Save company&quot; on any link, and
-            right-click &quot;Save company&quot; on a selected name, load
-            the extension in <code className="text-xs bg-gray-100 dark:bg-gray-800 px-1 rounded">extensions/company-capture</code>{" "}
-            from the repo: <b>chrome://extensions → Developer mode → Load unpacked</b>.
-          </p>
+          <p className="font-medium text-gray-900 dark:text-gray-100">Set up once:</p>
+          <ol className="list-decimal pl-5 mt-1 space-y-1">
+            <li>
+              Press <b>Ctrl+Shift+B</b> to show the bookmarks bar under the address bar.
+            </li>
+            <li>
+              Drag this button up onto that bar:{" "}
+              <a
+                ref={bookmarkletRef}
+                href="#"
+                onClick={(e) => e.preventDefault()}
+                className="inline-block px-2 py-0.5 rounded border border-gray-300 dark:border-gray-700 font-medium cursor-grab"
+              >
+                + Save company
+              </a>
+            </li>
+          </ol>
+          <p className="font-medium text-gray-900 dark:text-gray-100 mt-3">Then, whenever you see a company:</p>
+          <ul className="list-disc pl-5 mt-1 space-y-1">
+            <li>
+              On its LinkedIn page: click <b>+ Save company</b> on the bookmarks bar.
+            </li>
+            <li>
+              Name in a post: highlight the name with your mouse, then click <b>+ Save company</b>.
+            </li>
+          </ul>
+          <p className="mt-1">A small window says &quot;Saved&quot; and closes by itself.</p>
         </div>
       </div>
     </details>
