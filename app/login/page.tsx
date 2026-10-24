@@ -29,7 +29,10 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/finance");
+    // Return to the page that sent us here (e.g. a shared company link), but
+    // only within this site.
+    const next = new URLSearchParams(window.location.search).get("next");
+    router.push(next && /^\/(?![/\\])/.test(next) ? next : "/finance");
     router.refresh();
   };
 
@@ -41,7 +44,7 @@ export default function LoginPage() {
             Welcome back
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-            Sign in to your expense tracker.
+            Sign in to continue.
           </p>
 
           <form onSubmit={handleLogin} className="space-y-3">

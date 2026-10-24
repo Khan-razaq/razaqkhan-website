@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Save company settings</title>
+    <style>
+      body { font: 14px system-ui, sans-serif; margin: 24px; max-width: 420px; }
+      input { width: 100%; padding: 6px 8px; margin: 6px 0 10px; box-sizing: border-box; }
+      p { color: #555; }
+    </style>
+  </head>
+  <body>
+    <label for="site"><b>Your site's address</b></label>
+    <input id="site" type="url" placeholder="https://your-site.com" />
+    <button id="save">Save</button>
+    <span id="status"></span>
+    <p>Sign in on that site once in this browser. Then press Alt+Shift+S on a LinkedIn company page, or right-click a company link and choose "Save company".</p>
+    <script src="options.js"></script>
+  </body>
+</html>
