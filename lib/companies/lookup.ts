@@ -53,8 +53,16 @@ function titleCase(slug: string): string {
 // a link in it, or a bare name) into a name, the original link, and a website.
 export function parseCapture(input: { url?: string | null; text?: string | null; title?: string | null }): Capture {
   const pieces = [input.url, input.text, input.title].filter((p): p is string => !!p && p.trim() !== "");
-  const urlMatch = pieces.join(" ").match(/https?:\/\/[^\s<>"']+/i);
-  const rawUrl = urlMatch ? urlMatch[0].replace(/[).,]+$/, "") : null;
+  const joined = pieces.join(" ");
+  const urlMatch = joined.match(/https?:\/\/[^\s<>"']+/i);
+  // The iPhone shortcut sends only the path ("/company/maven-robotics/"):
+  // a full link inside the shortcut's address gets split into two links.
+  const pathMatch = joined.match(/^\s*\/?(company|school|showcase)\/[^\s/?#]+/i);
+  const rawUrl = urlMatch
+    ? urlMatch[0].replace(/[).,]+$/, "")
+    : pathMatch
+      ? `https://www.linkedin.com/${pathMatch[0].trim().replace(/^\//, "")}/`
+      : null;
 
   // A title like "Figure AI | LinkedIn" or "Figure AI: Overview | LinkedIn"
   const titleName = input.title
