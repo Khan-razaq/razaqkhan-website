@@ -311,15 +311,18 @@ function CompanyCard({
             </a>
           )}
         </div>
-        {pending ? (
-          <span className="shrink-0 text-[11px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
-            Looking up…
-          </span>
-        ) : company.status === "needs_review" ? (
-          <span className="shrink-0 text-[11px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
-            Check
-          </span>
-        ) : null}
+        <div className="shrink-0 flex flex-col items-end gap-1">
+          <AddedAgo createdAt={company.created_at} />
+          {pending ? (
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+              Looking up…
+            </span>
+          ) : company.status === "needs_review" ? (
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+              Check
+            </span>
+          ) : null}
+        </div>
       </div>
 
       {company.summary && <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">{company.summary}</p>}
@@ -360,11 +363,49 @@ function CompanyCard({
         <button onClick={onDelete} disabled={busy} className="text-red-600 dark:text-red-400 hover:underline cursor-pointer disabled:opacity-50">
           Delete
         </button>
-        <span className="ml-auto text-gray-400 dark:text-gray-500">
-          Saved {new Date(company.created_at).toLocaleDateString()}
-        </span>
       </div>
     </article>
+  );
+}
+
+// A calendar day on this device, like "2026-10-25". It stays the same all
+// day, so it works as a stable useSyncExternalStore snapshot.
+function localDayKey(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+}
+
+function daysBetween(fromKey: string, toKey: string): number {
+  const [fy, fm, fd] = fromKey.split("-").map(Number);
+  const [ty, tm, td] = toKey.split("-").map(Number);
+  return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86_400_000);
+}
+
+// "Added today", "Added 3 days ago", "Added 2 months ago", counted in
+// calendar days on this device. Hover (or long-press) shows the exact date.
+// Renders nothing on the server, which doesn't know the viewer's timezone.
+function AddedAgo({ createdAt }: { createdAt: string }) {
+  const today = useSyncExternalStore(noopSubscribe, () => localDayKey(new Date()), () => null);
+  const created = new Date(createdAt);
+  if (!today) return null;
+
+  const days = Math.max(0, daysBetween(localDayKey(created), today));
+  const label =
+    days === 0
+      ? "Added today"
+      : days === 1
+        ? "Added yesterday"
+        : days < 60
+          ? `Added ${days} days ago`
+          : `Added ${Math.floor(days / 30)} months ago`;
+
+  return (
+    <time
+      dateTime={createdAt}
+      title={created.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
+      className="text-[11px] text-gray-500 dark:text-gray-400 whitespace-nowrap"
+    >
+      {label}
+    </time>
   );
 }
 
@@ -508,23 +549,38 @@ function CaptureHelp() {
           <p className="font-medium text-gray-900 dark:text-gray-100">Set up once, in the Shortcuts app:</p>
           <ol className="list-decimal pl-5 mt-1 space-y-1">
             <li>
-              Tap <b>+</b> to make a new shortcut and name it <b>Save company</b>.
+              Tap <b>+</b> to make a new shortcut and name it <b>Save Company</b>.
             </li>
             <li>
-              Tap the <b>ⓘ</b> button and turn on <b>Show in Share Sheet</b>.
+              Tap <b>ⓘ</b> at the bottom and turn on <b>Show in Share Sheet</b>. In the <b>Receive</b> block,
+              tick only <b>URLs</b> and <b>Text</b>.
             </li>
             <li>
-              Add the action <b>Open URLs</b> and type{" "}
+              Add <b>Get URLs from Input</b> (it uses <b>Shortcut Input</b>).
+            </li>
+            <li>
+              Add <b>Get Component of URL</b>, set it to <b>Path</b>, and pick <b>URLs</b> as its input.
+            </li>
+            <li>
+              Add <b>Text</b> and type{" "}
               <code className="text-xs break-all bg-gray-100 dark:bg-gray-800 px-1 rounded">
-                {origin || "https://your-site"}/companies/add?url=
+                {origin || "https://your-site"}/companies/add?text=
               </code>{" "}
-              then tap the variable button and pick <b>Shortcut Input</b> right after it.
+              then, with no space, add the <b>Component of URL</b> bubble.
+            </li>
+            <li>
+              Add <b>Open URLs</b> and pick the <b>Text</b> bubble as what it opens.
             </li>
           </ol>
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            Sending only the link&apos;s path (and building the address in a Text block) matters: an address with a
+            second https:// link inside gets split in two, and Open URLs rejects a joined address as &quot;rich
+            text&quot;.
+          </p>
           <p className="font-medium text-gray-900 dark:text-gray-100 mt-3">Then, in the LinkedIn app:</p>
           <ul className="list-disc pl-5 mt-1 space-y-1">
             <li>
-              On a company&apos;s page: tap <b>Share</b>, then <b>Save company</b>.
+              On a company&apos;s page: tap <b>⋯ More</b>, then <b>Share via…</b>, then <b>Save Company</b>.
             </li>
           </ul>
         </div>
