@@ -363,6 +363,9 @@ function CompanyCard({
         <button onClick={onDelete} disabled={busy} className="text-red-600 dark:text-red-400 hover:underline cursor-pointer disabled:opacity-50">
           Delete
         </button>
+        <span className="ml-auto text-gray-400 dark:text-gray-500">
+          Saved {new Date(company.created_at).toLocaleDateString()}
+        </span>
       </div>
     </article>
   );
@@ -381,8 +384,8 @@ function daysBetween(fromKey: string, toKey: string): number {
 }
 
 // "Added today", "Added 3 days ago", "Added 2 months ago", counted in
-// calendar days on this device. Hover (or long-press) shows the exact date.
-// Renders nothing on the server, which doesn't know the viewer's timezone.
+// calendar days on this device. Renders nothing on the server, which doesn't
+// know the viewer's timezone.
 function AddedAgo({ createdAt }: { createdAt: string }) {
   const today = useSyncExternalStore(noopSubscribe, () => localDayKey(new Date()), () => null);
   const created = new Date(createdAt);
@@ -401,8 +404,7 @@ function AddedAgo({ createdAt }: { createdAt: string }) {
   return (
     <time
       dateTime={createdAt}
-      title={created.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
-      className="text-[11px] text-gray-500 dark:text-gray-400 whitespace-nowrap"
+      className="text-[11px] font-medium text-teal-600 dark:text-teal-400 whitespace-nowrap"
     >
       {label}
     </time>
