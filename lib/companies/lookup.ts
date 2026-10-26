@@ -30,6 +30,10 @@ export type LookupResult = {
   summary: string | null;
   status: "ready" | "needs_review";
   lookup_note: string | null;
+  // Not stored as-is: the LinkedIn page the website links to, and the
+  // website's own name for the company.
+  linkedin_url: string | null;
+  site_name: string | null;
 };
 
 const USER_AGENT = "Mozilla/5.0 (compatible; razaqkhan-company-tracker/1.0; personal use)";
@@ -282,6 +286,14 @@ async function websiteFromGuess(name: string, sourceUrl: string | null): Promise
 // Reading the site
 // ---------------------------------------------------------------------------
 
+// Most company websites link their LinkedIn page (usually in the footer).
+// Reading that link from the company's own site means LinkedIn itself is
+// never fetched.
+function findLinkedIn(html: string): string | null {
+  const slug = html.match(/linkedin\.com\/company\/([A-Za-z0-9_.%-]+)/i)?.[1];
+  return slug ? `https://www.linkedin.com/company/${decodeURIComponent(slug).toLowerCase()}/` : null;
+}
+
 function findSummary(html: string): string | null {
   const desc = metaContent(html, "og:description") ?? metaContent(html, "description") ?? metaContent(html, "twitter:description");
   if (!desc) return null;
@@ -414,6 +426,8 @@ export async function lookupCompany(company: {
   let website = company.website && isSafeUrl(company.website) ? company.website : null;
   let home: { url: string; html: string } | null = null;
   let websiteGuessed = false;
+  let linkedinUrl: string | null = null;
+  let siteName: string | null = null;
 
   // 1. Website
   if (website) {
@@ -444,6 +458,8 @@ export async function lookupCompany(company: {
   if (home) {
     website = new URL(home.url).origin + "/";
     summary = findSummary(home.html) ?? summary;
+    linkedinUrl = findLinkedIn(home.html);
+    siteName = metaContent(home.html, "og:site_name")?.trim() || null;
     atsMatch = atsMatch ?? detectAts(home.html);
     if (!careersUrl) careersUrl = findCareersLink(home.html, home.url);
 
@@ -508,5 +524,7 @@ export async function lookupCompany(company: {
     summary,
     status,
     lookup_note: notes.length ? notes.join(" ") : null,
+    linkedin_url: linkedinUrl,
+    site_name: siteName,
   };
 }

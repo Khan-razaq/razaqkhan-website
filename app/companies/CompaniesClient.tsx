@@ -338,11 +338,20 @@ function CompanyCard({
             {company.open_roles} open {company.open_roles === 1 ? "role" : "roles"}
           </span>
         )}
-        {company.source_url && company.source_url !== company.website && (
-          <a href={company.source_url} target="_blank" rel="noopener noreferrer" className="text-gray-500 dark:text-gray-400 hover:underline">
-            {hostOf(company.source_url).includes("linkedin") ? "LinkedIn" : "Source"} ↗
-          </a>
-        )}
+        {/* Every company gets a LinkedIn link: its page if we know it,
+            otherwise a LinkedIn search for its name. */}
+        <a
+          href={
+            company.source_url && hostOf(company.source_url).includes("linkedin")
+              ? company.source_url
+              : `https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(company.name)}`
+          }
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-gray-500 dark:text-gray-400 hover:underline"
+        >
+          {company.source_url && hostOf(company.source_url).includes("linkedin") ? "LinkedIn" : "Find on LinkedIn"} ↗
+        </a>
       </div>
 
       {company.notes && (

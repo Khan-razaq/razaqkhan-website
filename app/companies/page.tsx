@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { mergeDuplicates } from "@/lib/companies/save";
 import CompaniesClient from "./CompaniesClient";
 
 export const metadata: Metadata = {
@@ -17,6 +18,10 @@ export default async function CompaniesPage() {
   if (!user) {
     redirect("/login?next=/companies");
   }
+
+  // Joins any companies saved twice (e.g. once by name on the laptop, once by
+  // LinkedIn link on the phone) before showing the list.
+  await mergeDuplicates(supabase);
 
   const { data: companies } = await supabase
     .from("companies")
