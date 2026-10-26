@@ -69,7 +69,16 @@ export async function runLookup(supabase: SupabaseClient, id: string): Promise<s
     };
     // The LinkedIn page the company's own website links to.
     if (!linkedInUrl(company.source_url) && linkedin_url) update.source_url = linkedin_url;
-    const better = betterName(company.name, site_name);
+    // Names spelled out by the site itself, or by the LinkedIn link
+    // ("fauna-robotics" → "Fauna Robotics").
+    const slug = linkedInUrl((update.source_url as string | undefined) ?? company.source_url)
+      ?.split("/")
+      .filter(Boolean)
+      .pop();
+    const slugName = slug?.includes("-")
+      ? slug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
+      : null;
+    const better = betterName(company.name, site_name) ?? betterName(company.name, slugName);
     if (better) update.name = better;
 
     let { error: updateError } = await supabase.from("companies").update(update).eq("id", id);

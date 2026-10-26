@@ -95,11 +95,15 @@ export function mergeGroup(group: CompanyRow[]): { keep: CompanyRow; drop: strin
   const byAge = [...group].sort((a, b) => a.created_at.localeCompare(b.created_at));
   const oldest = byAge[0];
 
-  // Lookup results from the most trustworthy row: finished and not flagged
-  // beats flagged beats still running; then the most recently checked.
+  // Lookup results all come from one row, so they agree with each other:
+  // finished and not flagged beats flagged beats still running; then the
+  // row that found more; then the most recently checked.
+  const found = (r: CompanyRow) =>
+    [r.website, r.careers_url, r.ats, r.open_roles, r.summary].filter((v) => v !== null).length;
   const best = [...group].sort(
     (a, b) =>
       (STATUS_RANK[b.status] ?? 0) - (STATUS_RANK[a.status] ?? 0) ||
+      found(b) - found(a) ||
       (b.checked_at ?? "").localeCompare(a.checked_at ?? "")
   )[0];
 
@@ -111,22 +115,22 @@ export function mergeGroup(group: CompanyRow[]): { keep: CompanyRow; drop: strin
       Number(!a.name.includes(" ")) - Number(!b.name.includes(" "))
   )[0].name;
 
-  const firstSet = <K extends keyof CompanyRow>(key: K): CompanyRow[K] =>
-    (best[key] ?? byAge.find((r) => r[key] !== null)?.[key] ?? null) as CompanyRow[K];
-
   const notes = [...new Set(byAge.map((r) => r.notes?.trim()).filter((n): n is string => !!n))].join("\n");
 
   return {
     keep: {
       ...oldest,
       name,
-      source_url: byAge.map((r) => linkedInUrl(r.source_url)).find(Boolean) ?? oldest.source_url ?? firstSet("source_url"),
-      website: firstSet("website"),
-      careers_url: firstSet("careers_url"),
+      source_url:
+        byAge.map((r) => linkedInUrl(r.source_url)).find(Boolean) ??
+        byAge.find((r) => r.source_url)?.source_url ??
+        null,
+      website: best.website,
+      careers_url: best.careers_url,
       ats: best.ats,
       ats_slug: best.ats_slug,
       open_roles: best.open_roles,
-      summary: firstSet("summary"),
+      summary: best.summary ?? byAge.find((r) => r.summary)?.summary ?? null,
       status: best.status,
       lookup_note: best.lookup_note,
       notes: notes || null,

@@ -50,6 +50,22 @@ function hostOf(url: string): string {
   }
 }
 
+// The note under the save box, kept up to date as the lookup finishes.
+function savedMessage(
+  message: { text: string; companyId?: string; name?: string; listAtSave?: Company[] },
+  companies: Company[]
+): string {
+  if (!message.companyId) return message.text;
+  const saved = companies.find((c) => c.id === message.companyId);
+  if (saved) return saved.status === "pending" ? message.text : `Done: ${saved.name} is in the list below.`;
+  // Gone after the list reloaded: the lookup found it was a company already
+  // saved under another name, and the two were joined.
+  if (companies !== message.listAtSave && !companies.some((c) => c.status === "pending")) {
+    return `Done: ${message.name} was already saved under another name, so they were joined.`;
+  }
+  return message.text;
+}
+
 export default function CompaniesClient({ companies }: { companies: Company[] }) {
   const router = useRouter();
   const supabase = createClient();
@@ -62,6 +78,9 @@ export default function CompaniesClient({ companies }: { companies: Company[] })
     // Set while the just-saved company is being looked up
     companyId?: string;
     name?: string;
+    // The list as it was when saved, to tell "not loaded yet" apart from
+    // "merged into a company already saved"
+    listAtSave?: Company[];
   } | null>(null);
   const [filter, setFilter] = useState<"all" | "needs_review">("all");
   const [search, setSearch] = useState("");
@@ -108,7 +127,13 @@ export default function CompaniesClient({ companies }: { companies: Company[] })
     setMessage(
       result.duplicate
         ? { kind: "ok", text: `${result.name} is already saved.` }
-        : { kind: "ok", text: `Saved ${result.name}. Looking it up…`, companyId: result.id, name: result.name }
+        : {
+            kind: "ok",
+            text: `Saved ${result.name}. Looking it up…`,
+            companyId: result.id,
+            name: result.name,
+            listAtSave: companies,
+          }
     );
     router.refresh();
   };
@@ -206,9 +231,7 @@ export default function CompaniesClient({ companies }: { companies: Company[] })
                   message.kind === "ok" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
                 }`}
               >
-                {message.companyId && companies.some((c) => c.id === message.companyId && c.status !== "pending")
-                  ? `Done: ${message.name} is in the list below.`
-                  : message.text}
+                {savedMessage(message, companies)}
               </p>
             )}
           </form>
