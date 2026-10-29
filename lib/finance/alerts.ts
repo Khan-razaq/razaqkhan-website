@@ -10,7 +10,7 @@
 // Bump PARSER_VERSION after changing the rules: saved emails read with an
 // older version are read again.
 
-export const PARSER_VERSION = 1;
+export const PARSER_VERSION = 3;
 
 export type AlertKind = "purchase" | "refund" | "transfer" | "card_payment" | "income" | "ignore" | "unreadable";
 
@@ -61,6 +61,20 @@ function cleanMerchant(raw: string | undefined): string | null {
   return m.length >= 2 && m.length <= 60 ? m : null;
 }
 
+// "FNU MOHAMMED IBRAHIM" -> "Fnu Mohammed Ibrahim"
+function nameCase(name: string): string {
+  if (name !== name.toUpperCase()) return name;
+  return name.toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (_, sep, c) => sep + c.toUpperCase());
+}
+
+// Who money came from, with the memo if the sender wrote one:
+// "Zelle from Qader Mohammed (Golf)".
+function moneyFrom(name: string, text: string): string {
+  const via = /zelle/i.test(text) ? "Zelle from" : "From";
+  const memo = text.match(/\nmemo:? ([^\n]{1,60})/i)?.[1].trim();
+  return `${via} ${nameCase(name)}${memo ? ` (${memo})` : ""}`;
+}
+
 function last4(text: string): string | null {
   return (
     text.match(/(?:ending(?: in)?|last (?:4|four)(?: digits)?(?: of)?|card|account)[^\d\n]{0,25}?(\d{4})\b/i)?.[1] ??
@@ -72,6 +86,10 @@ function last4(text: string): string | null {
 // The patterns banks use, most specific first. Each returns the amount and
 // (when the email names one) the other party.
 const PATTERNS: { kind: AlertKind; re: RegExp; amount: number; who?: number }[] = [
+  // Zelle money in ("QADER MOHAMMED sent you money … Amount $20.00"); first,
+  // because the email also says "payment".
+  { kind: "income", re: new RegExp(`([^\\n]{2,60}?) sent you money[\\s\\S]{0,80}?amount:?\\s*${MONEY}`, "i"), amount: 2, who: 1 },
+
   // Paying off a card ("We received your $250.00 payment", "Payment of $250 posted")
   { kind: "card_payment", re: new RegExp(`(?:received|posted|processed|applied)[^.\\n]{0,40}?payment of ${MONEY}`, "i"), amount: 1 },
   { kind: "card_payment", re: new RegExp(`(?:received|posted|processed)[^.\\n]{0,20}?${MONEY}[^.\\n]{0,10}?payment`, "i"), amount: 1 },
@@ -120,7 +138,9 @@ export function parseAlert(email: { sender: string; subject: string; body: strin
     for (const m of text.matchAll(new RegExp(p.re.source, `${p.re.flags}g`))) {
       const amount = money(m[p.amount]);
       if (amount === null) continue;
-      return { kind: p.kind, amount, merchant: p.who ? cleanMerchant(m[p.who]) : null, bank, cardLast4: card };
+      let merchant = p.who ? cleanMerchant(m[p.who]) : null;
+      if (p.kind === "income" && merchant) merchant = moneyFrom(merchant, text);
+      return { kind: p.kind, amount, merchant, bank, cardLast4: card };
     }
   }
 

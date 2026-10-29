@@ -69,9 +69,31 @@ export async function confirmAlert(input: Confirm): Promise<{ error: string | nu
       .from("bank_alerts")
       .update({ status: "accepted", card_payment_id: payment.id, reviewed_at: new Date().toISOString() })
       .eq("id", alert.id);
+  } else if (alert.kind === "income") {
+    // Money in (Zelle and the like) goes on the Income page, whole, into the
+    // account it arrived in.
+    if (!input.bankAccountId) return { error: "Pick the account the money went into." };
+    const source = input.description.trim() || "Money in";
+    const { data: income, error } = await supabase
+      .from("incomes")
+      .insert({ user_id: user.id, amount, source, income_date: input.date })
+      .select("id")
+      .single();
+    if (error || !income) return { error: error?.message ?? "Couldn't save the income." };
+    const { error: depositError } = await supabase
+      .from("income_deposits")
+      .insert({ income_id: income.id, bank_account_id: input.bankAccountId, amount });
+    if (depositError) {
+      await supabase.from("incomes").delete().eq("id", income.id);
+      return { error: depositError.message };
+    }
+    await supabase
+      .from("bank_alerts")
+      .update({ status: "accepted", reviewed_at: new Date().toISOString() })
+      .eq("id", alert.id);
   } else {
-    if (alert.kind === "income" || alert.kind === "refund") {
-      return { error: "Money coming in isn't an expense. Dismiss it, or log it on the Income page." };
+    if (alert.kind === "refund") {
+      return { error: "A refund isn't an expense. Dismiss it." };
     }
     if (!input.creditCardId && !input.bankAccountId) return { error: "Pick the card or account." };
     const category = (CATEGORIES as readonly string[]).includes(input.category) ? input.category : "Other";

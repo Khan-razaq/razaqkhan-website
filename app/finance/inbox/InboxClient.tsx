@@ -134,7 +134,8 @@ function AlertCard({ alert, creditCards, bankAccounts }: { alert: Alert; creditC
   const router = useRouter();
   const kind = alert.kind ?? "unreadable";
   const isSkipped = kind === "ignore";
-  const isMoneyIn = kind === "income" || kind === "refund";
+  const isIncome = kind === "income";
+  const isRefund = kind === "refund";
   const isCardPayment = kind === "card_payment";
 
   // Skipped emails start folded: one tap opens the form if one was real.
@@ -165,7 +166,7 @@ function AlertCard({ alert, creditCards, bankAccounts }: { alert: Alert; creditC
       date,
       category,
       creditCardId: isCardPayment ? paidCard || null : paidWith.startsWith("card:") ? paidWith.slice(5) : null,
-      bankAccountId: isCardPayment ? fromAccount || null : paidWith.startsWith("account:") ? paidWith.slice(8) : null,
+      bankAccountId: isCardPayment || isIncome ? fromAccount || null : paidWith.startsWith("account:") ? paidWith.slice(8) : null,
     });
     setBusy(false);
     if (result.error) setError(result.error);
@@ -208,14 +209,14 @@ function AlertCard({ alert, creditCards, bankAccounts }: { alert: Alert; creditC
         </button>
       )}
 
-      {open && isMoneyIn && (
+      {open && isRefund && (
         <div className="mt-3 flex items-center justify-between gap-3">
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Money coming in isn&apos;t an expense. Log it on the{" "}
-            <Link href="/finance/income" className="text-blue-600 dark:text-blue-400 hover:underline">
-              Income page
-            </Link>{" "}
-            if you want, then dismiss this.
+            A refund isn&apos;t an expense. Dismiss it, or delete the original purchase on the{" "}
+            <Link href="/finance" className="text-blue-600 dark:text-blue-400 hover:underline">
+              dashboard
+            </Link>
+            .
           </p>
           <button onClick={handleDismiss} disabled={busy} className={secondaryButton}>
             Dismiss
@@ -223,13 +224,13 @@ function AlertCard({ alert, creditCards, bankAccounts }: { alert: Alert; creditC
         </div>
       )}
 
-      {open && !isMoneyIn && (
+      {open && !isRefund && (
         <div className="mt-3 space-y-2">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder={isCardPayment ? "Card payment" : "What was it?"}
+              placeholder={isCardPayment ? "Card payment" : isIncome ? "Who sent it?" : "What was it?"}
               aria-label="Description"
               className={`${inputClass} col-span-2`}
             />
@@ -250,7 +251,21 @@ function AlertCard({ alert, creditCards, bankAccounts }: { alert: Alert; creditC
             />
           </div>
 
-          {isCardPayment ? (
+          {isIncome ? (
+            <select
+              value={fromAccount}
+              onChange={(e) => setFromAccount(e.target.value)}
+              aria-label="Went into"
+              className={`${inputClass} w-full`}
+            >
+              <option value="">Went into…</option>
+              {bankAccounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          ) : isCardPayment ? (
             <div className="grid grid-cols-2 gap-2">
               <select value={paidCard} onChange={(e) => setPaidCard(e.target.value)} aria-label="Card paid" className={inputClass}>
                 <option value="">Card paid…</option>
@@ -306,7 +321,7 @@ function AlertCard({ alert, creditCards, bankAccounts }: { alert: Alert; creditC
           {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
           <div className="flex gap-2">
             <button onClick={handleConfirm} disabled={busy} className={`${primaryButton} flex-1`}>
-              {busy ? "Saving…" : isCardPayment ? "✓ Add card payment" : "✓ Add to expenses"}
+              {busy ? "Saving…" : isCardPayment ? "✓ Add card payment" : isIncome ? "✓ Add to income" : "✓ Add to expenses"}
             </button>
             <button onClick={handleDismiss} disabled={busy} className={secondaryButton}>
               ✕ Dismiss
