@@ -61,7 +61,11 @@ export async function readNewAlerts(supabase: SupabaseClient): Promise<void> {
         // cards means asking, not guessing.
         const words = BANK_WORDS[parsed.bank];
         const pool: Account[] = isCardBank(parsed.bank) ? cards ?? [] : accounts ?? [];
-        const fits = pool.filter((a) => words.test(`${a.name} ${a.issuer ?? ""}`));
+        let fits = pool.filter((a) => words.test(`${a.name} ${a.issuer ?? ""}`));
+        // Debit card alerts and Zelle come from checking, not savings.
+        if (fits.length > 1 && !isCardBank(parsed.bank)) {
+          fits = fits.filter((a) => /checking/i.test(a.name));
+        }
         if (fits.length === 1) {
           if (isCardBank(parsed.bank)) creditCardId = fits[0].id;
           else bankAccountId = fits[0].id;
