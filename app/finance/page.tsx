@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import ExpenseTracker from "./ExpenseTracker";
+import { countWaitingAlerts, readNewAlerts } from "@/lib/finance/inbox";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -49,8 +50,13 @@ export default async function Home() {
     redirect("/finance/setup");
   }
 
+  // Read new bank alert emails so the Inbox count is current.
+  await readNewAlerts(supabase);
+  const inboxCount = await countWaitingAlerts(supabase);
+
   return (
     <ExpenseTracker
+      inboxCount={inboxCount}
       bankAccounts={bankAccounts}
       creditCards={creditCards}
       expenses={expenses}

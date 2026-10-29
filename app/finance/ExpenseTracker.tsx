@@ -158,7 +158,9 @@ export default function ExpenseTracker({
   cardPayments,
   contributions,
   fixedExpenses,
+  inboxCount,
 }: {
+  inboxCount: number;
   bankAccounts: BankAccount[];
   creditCards: CreditCard[];
   expenses: Expense[];
@@ -417,7 +419,18 @@ export default function ExpenseTracker({
               </button>
             </div>
           </div>
-          <nav className="flex gap-4 text-xs">
+          <nav className="flex flex-wrap gap-4 text-xs">
+            <Link
+              href="/finance/inbox"
+              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+            >
+              Inbox
+              {inboxCount > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-teal-600 text-white text-[10px] font-semibold">
+                  {inboxCount}
+                </span>
+              )}
+            </Link>
             <Link
               href="/finance/income"
               className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
