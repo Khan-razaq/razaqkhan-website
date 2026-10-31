@@ -10,7 +10,7 @@
 // Bump PARSER_VERSION after changing the rules: saved emails read with an
 // older version are read again.
 
-export const PARSER_VERSION = 5;
+export const PARSER_VERSION = 6;
 
 export type AlertKind = "purchase" | "refund" | "transfer" | "card_payment" | "income" | "ignore" | "unreadable";
 
@@ -60,6 +60,54 @@ function cleanMerchant(raw: string | undefined): string | null {
     .replace(/[.,;:!]+$/, "")
     .trim();
   return m.length >= 2 && m.length <= 60 ? m : null;
+}
+
+// Card networks write the store as NAME, store number, CITY, state, country:
+// "DUNKIN #356492 ROXBURY US", "SHELL OIL 5744 QUINCY MA US", "SQ *BLUE BOTTLE
+// BOSTON MA". Store numbers mean nothing to a person; the brand and the area
+// do: "Dunkin · Roxbury".
+const PROCESSOR_PREFIX = /^(?:sq|tst|py|sp|pp|paypal|dd|ctlp|wpy|bt|pos|ls|fs|ic|in) ?\* ?/i;
+const US_STATES = new Set(
+  "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY".split(" ")
+);
+const COUNTRIES = new Set(["US", "USA", "IN", "CA", "GB", "MX"]);
+// First words of two-word places ("NEW DELHI", "SAN DIEGO"). Others show
+// shortened ("FALL RIVER" -> "River"), still a hint of where.
+const PLACE_START = /^(new|san|santa|los|las|el|st|saint|fort|ft|port|mount|mt|north|south|east|west|lake|palm|salt|grand|long|cape|jamaica|hyde)$/i;
+const STORE_WORDS: Record<string, string> = { WHSE: "Warehouse", MKTPLACE: "Marketplace", MKTP: "Marketplace", MKT: "Market", RSTRNT: "Restaurant" };
+
+function storeCase(s: string): string {
+  if (s !== s.toUpperCase()) return s;
+  return s
+    .split(" ")
+    .map((w) => STORE_WORDS[w] ?? w.toLowerCase().replace(/(^|[-/&])(\p{L})/gu, (_, sep, c) => sep + c.toUpperCase()))
+    .join(" ");
+}
+
+export function tidyMerchant(raw: string): string {
+  const words = raw.replace(PROCESSOR_PREFIX, "").replace(/\s*\*\s*/g, " ").trim().split(/\s+/);
+  let area: string | null = null;
+
+  // Only a name ending in a country or state code is in the network layout;
+  // "QUINCY GAS" isn't, and there's no telling its city from its name.
+  const last = () => words[words.length - 1];
+  if (words.length >= 3 && raw === raw.toUpperCase() && (COUNTRIES.has(last()) || US_STATES.has(last()))) {
+    if (COUNTRIES.has(last())) words.pop();
+    if (words.length >= 3 && US_STATES.has(last())) words.pop();
+    if (words.length >= 2) {
+      area = words.pop()!;
+      if (words.length >= 2 && PLACE_START.test(words[words.length - 1])) area = `${words.pop()} ${area}`;
+    }
+  }
+
+  // Store numbers and terminal codes: "#356492", "5744", "Q35", "STORE 12".
+  const name = words
+    .filter((w) => !/^#|^[A-Z]{0,2}\d{2,}$|^\d+$/i.test(w))
+    .join(" ")
+    .replace(/\bSTORE$/i, "")
+    .trim();
+  const tidy = storeCase(name || raw);
+  return area ? `${tidy} · ${storeCase(area)}` : tidy;
 }
 
 // "FNU MOHAMMED IBRAHIM" -> "Fnu Mohammed Ibrahim"
@@ -142,10 +190,15 @@ export function parseAlert(email: { sender: string; subject: string; body: strin
       const amount = money(m[p.amount]);
       if (amount === null) continue;
       let merchant = p.who ? cleanMerchant(m[p.who]) : null;
-      // Citi's sentence names the card, but its table has "Merchant  DUNKIN #356492 ROXBURY US".
+      // Citi's sentence names the card, but its table has "Merchant  DUNKIN #356492 ROXBURY US"
+      // (sometimes wrapped onto a second line).
       if (!merchant && p.kind === "purchase") {
-        merchant = cleanMerchant(text.match(/\nmerchant:?\s*\n?([^\n$]{2,60})/i)?.[1]?.replace(/\s+US$/, ""));
+        const field = text.match(/\nmerchant:?\s*\n?([^\n$]{2,60})(?:\n([^\n$]{2,40}))?/i);
+        // The wrapped part is in capitals like the name; "Date" or "Time" is the next label.
+        const wrapped = field?.[2] && /[A-Z]/.test(field[2]) && field[2] === field[2].toUpperCase() ? field[2] : "";
+        merchant = cleanMerchant(field ? `${field[1]} ${wrapped}` : undefined);
       }
+      if (merchant && (p.kind === "purchase" || p.kind === "refund")) merchant = tidyMerchant(merchant);
       if (p.kind === "income" && merchant) merchant = moneyFrom(merchant, text);
       return { kind: p.kind, amount, merchant, bank, cardLast4: card };
     }
@@ -168,7 +221,9 @@ export const CATEGORIES = ["Food", "Transport", "Shopping", "Bills", "Other"] as
 export type Category = (typeof CATEGORIES)[number];
 
 export function merchantKey(merchant: string): string {
+  // The brand, not the branch: every Dunkin learns the same category.
   return merchant
+    .split(" · ")[0]
     .toLowerCase()
     .replace(/\b(store|#|no\.?)\s*\d+\b/g, " ")
     .replace(/\d{3,}/g, " ")
@@ -178,7 +233,7 @@ export function merchantKey(merchant: string): string {
 }
 
 const CATEGORY_WORDS: [Category, RegExp][] = [
-  ["Food", /uber\W*eats|doordash|grubhub|instacart|starbucks|dunkin|coffee|caf[eé]|restaurant|kitchen|grill|pizza|burger|taco|sushi|ramen|thai|bakery|chipotle|mcdonald|subway|wendy|chick-?fil|panera|sweetgreen|shake shack|trader joe|whole foods|star market|stop ?& ?shop|wegmans|h ?mart|market basket|aldi|grocery|food|deli|bar\b|pub\b/],
+  ["Food", /uber\W*eats|doordash|grubhub|instacart|starbucks|dunkin|coffee|caf[eé]|restaurant|kitchen|grill|pizza|burger|taco|sushi|ramen|thai|bakery|chipotle|mcdonald|subway|wendy|chick-?fil|panera|sweetgreen|shake shack|trader joe|whole foods|star market|stop ?& ?shop|wegmans|h ?mart|market basket|aldi|grocery|food|deli|\bmarket\b|bar\b|pub\b/],
   ["Transport", /\buber\b|lyft|mbta|charlie|transit|amtrak|parking|park(ing)? meter|\bgas\b|shell|exxon|mobil|chevron|sunoco|citgo|bp\b|airline|delta|jetblue|united|american air|southwest|spirit|frontier|toll|ez ?pass|zipcar|bluebikes/],
   ["Bills", /verizon|t-?mobile|at&t|total wireless|mint mobile|comcast|xfinity|eversource|national grid|electric|utility|water|insurance|geico|progressive|state farm|netflix|spotify|hulu|disney|youtube|apple\.com|icloud|google|adobe|chatgpt|openai|anthropic|claude|subscription|rent|landlord|gym|planet fitness/],
   ["Shopping", /amazon|amzn|target|walmart|costco|best buy|apple store|ikea|marshalls|tj ?maxx|home ?goods|nike|uniqlo|zara|h&m|macy|nordstrom|cvs|walgreens|ebay|etsy|shein|temu/],
