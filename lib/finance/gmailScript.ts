@@ -58,7 +58,9 @@ function send(msg) {
       p_message_id: msg.getId(),
       p_sender: msg.getFrom(),
       p_subject: msg.getSubject(),
-      p_body: msg.getPlainBody().slice(0, 8000),
+      // Both versions of the email: some banks (Citi) put the store name
+      // only in the designed one.
+      p_body: (msg.getPlainBody().slice(0, 6000) + '\\n----\\n' + toText(msg.getBody())).slice(0, 14000),
       p_email_date: msg.getDate().toISOString(),
     }),
     muteHttpExceptions: true,
@@ -66,6 +68,21 @@ function send(msg) {
   if (res.getResponseCode() >= 300) {
     throw new Error('Website said ' + res.getResponseCode() + ': ' + res.getContentText());
   }
+}
+
+// The words of an HTML email, one table cell or paragraph per line.
+function toText(html) {
+  return html
+    .replace(/<(style|script|head)[\\s\\S]*?<\\/\\1>/gi, '')
+    .replace(/<br\\s*\\/?>|<\\/(p|div|td|th|tr|li|h\\d)>/gi, '\\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&#x27;|&#39;/gi, "'")
+    .replace(/&[a-z#0-9]+;/gi, ' ')
+    .replace(/[ \\t]+/g, ' ')
+    .replace(/ *\\n[\\s]*/g, '\\n')
+    .trim();
 }
 `;
 }

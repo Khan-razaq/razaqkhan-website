@@ -10,7 +10,7 @@
 // Bump PARSER_VERSION after changing the rules: saved emails read with an
 // older version are read again.
 
-export const PARSER_VERSION = 4;
+export const PARSER_VERSION = 5;
 
 export type AlertKind = "purchase" | "refund" | "transfer" | "card_payment" | "income" | "ignore" | "unreadable";
 
@@ -78,7 +78,7 @@ function moneyFrom(name: string, text: string): string {
 
 function last4(text: string): string | null {
   return (
-    text.match(/(?:ending(?: in)?|last (?:4|four)(?: digits)?(?: of)?|card|account)[^\d\n]{0,25}?(\d{4})\b/i)?.[1] ??
+    text.match(/(?:ending(?: in)?|last (?:4|four)(?: digits)?(?: of)?|card|account)[^\d\n]{0,25}?\n?(\d{4})\b/i)?.[1] ??
     text.match(/(?:\.{2,}|\*{2,}|x{2,})\s?(\d{4})\b/i)?.[1] ??
     null
   );
@@ -142,6 +142,10 @@ export function parseAlert(email: { sender: string; subject: string; body: strin
       const amount = money(m[p.amount]);
       if (amount === null) continue;
       let merchant = p.who ? cleanMerchant(m[p.who]) : null;
+      // Citi's sentence names the card, but its table has "Merchant  DUNKIN #356492 ROXBURY US".
+      if (!merchant && p.kind === "purchase") {
+        merchant = cleanMerchant(text.match(/\nmerchant:?\s*\n?([^\n$]{2,60})/i)?.[1]?.replace(/\s+US$/, ""));
+      }
       if (p.kind === "income" && merchant) merchant = moneyFrom(merchant, text);
       return { kind: p.kind, amount, merchant, bank, cardLast4: card };
     }
