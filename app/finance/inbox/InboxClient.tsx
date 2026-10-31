@@ -347,9 +347,11 @@ function GmailSetup({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  // Asked on the page, not with a browser popup: some browsers block those.
+  const [confirming, setConfirming] = useState(false);
 
   const handleCreate = async () => {
-    if (gmailKey && !confirm("Make a new key? The script you set up before will stop working until you paste the new one.")) return;
+    setConfirming(false);
     setBusy(true);
     setError("");
     const result = await createGmailKey();
@@ -417,8 +419,28 @@ function GmailSetup({
           one turns the old one off.
         </p>
         {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
-        {!script ? (
-          <button onClick={handleCreate} disabled={busy} className={primaryButton}>
+        {gmailKey && (
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Updating a script you already have? Make a new key, copy the script, paste it over all the old code in your
+            project and save. No need to run setup again.
+          </p>
+        )}
+        {!script && confirming ? (
+          <div className="space-y-2">
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              Your current script will stop working until you paste the new one.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={handleCreate} disabled={busy} className={primaryButton}>
+                Yes, make a new key
+              </button>
+              <button onClick={() => setConfirming(false)} className={secondaryButton}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : !script ? (
+          <button onClick={gmailKey ? () => setConfirming(true) : handleCreate} disabled={busy} className={primaryButton}>
             {busy ? "Making…" : gmailKey ? "Make a new key" : "Make my key"}
           </button>
         ) : (
