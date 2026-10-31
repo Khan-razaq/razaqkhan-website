@@ -10,7 +10,7 @@
 // Bump PARSER_VERSION after changing the rules: saved emails read with an
 // older version are read again.
 
-export const PARSER_VERSION = 3;
+export const PARSER_VERSION = 4;
 
 export type AlertKind = "purchase" | "refund" | "transfer" | "card_payment" | "income" | "ignore" | "unreadable";
 
@@ -39,7 +39,7 @@ export function bankOf(sender: string): Bank | null {
 
 // Newsletters, offers, statements, reminders, security notices.
 const NOT_A_TRANSACTION =
-  /\b(statement is (ready|available)|your (monthly )?statement|payment (is )?due|due date|upcoming payment|payment reminder|autopay (is )?(scheduled|set up|on)|scheduled payment|minimum payment|credit (score|limit increase)|offer|rewards?|earn \d|cash ?back|points|bonus|% (apr|off)|apply now|pre-?approved|upgrade|survey|feedback|tell us|how did we do|sign[- ]?in|log ?in|password|verification code|one-time (code|passcode)|security alert|new device|profile (was )?updated|e-?mail address (was )?(changed|updated)|paperless|privacy|terms|webinar|invite)\b/i;
+  /\b(statement is (ready|available)|your (monthly )?statement|payment (is )?due|due date|upcoming payment|payment reminder|autopay (is )?(scheduled|set up|on)|scheduled payment|minimum payment|credit (score|limit)|offer|rewards?|earn \$?\d|could be yours|flex pay|eligible for|refer|pre-?approval|online access|ready to manage|new statement|travel guide|is here|cash ?back|points|bonus|% (apr|off)|apply now|pre-?approved|upgrade|survey|feedback|tell us|how did we do|sign[- ]?in|log ?in|password|verification code|one-time (code|passcode)|security alert|new device|profile (was )?updated|e-?mail address (was )?(changed|updated)|paperless|privacy|terms|webinar|invite)\b/i;
 
 const MONEY = String.raw`\$\s?([\d,]+(?:\.\d{2})?)`;
 
@@ -51,7 +51,8 @@ function money(s: string | undefined): number | null {
 
 // "STARBUCKS STORE 1234 on 10/29/2026 at 3:41 PM" -> "STARBUCKS STORE 1234"
 function cleanMerchant(raw: string | undefined): string | null {
-  if (!raw) return null;
+  // Citi's alert names the card, not the store: "made on your Costco Anywhere account".
+  if (!raw || /^(on )?your\b/i.test(raw.trim())) return null;
   const m = raw
     .replace(/\s+/g, " ")
     .replace(/\s*\((?:confirmation|ref|reference)[^)]*\)/i, "")
@@ -90,7 +91,9 @@ const PATTERNS: { kind: AlertKind; re: RegExp; amount: number; who?: number }[] 
   // because the email also says "payment".
   { kind: "income", re: new RegExp(`([^\\n]{2,60}?) sent you money[\\s\\S]{0,80}?amount:?\\s*${MONEY}`, "i"), amount: 2, who: 1 },
 
-  // Paying off a card ("We received your $250.00 payment", "Payment of $250 posted")
+  // Paying off a card ("We received your $250.00 payment", "Payment of $250 posted",
+  // Amex: "We received your payment. … Payment amount: $518.24")
+  { kind: "card_payment", re: new RegExp(`received your payment[\\s\\S]{0,400}?payment amount:?\\s*${MONEY}`, "i"), amount: 1 },
   { kind: "card_payment", re: new RegExp(`(?:received|posted|processed|applied)[^.\\n]{0,40}?payment of ${MONEY}`, "i"), amount: 1 },
   { kind: "card_payment", re: new RegExp(`(?:received|posted|processed)[^.\\n]{0,20}?${MONEY}[^.\\n]{0,10}?payment`, "i"), amount: 1 },
   { kind: "card_payment", re: new RegExp(`payment of ${MONEY}[^.\\n]{0,40}?(?:has been |was )?(?:received|posted|processed|applied|credited)`, "i"), amount: 1 },
