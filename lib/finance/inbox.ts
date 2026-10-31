@@ -29,7 +29,7 @@ const BANK_WORDS: Record<Bank, RegExp> = {
 export async function readNewAlerts(supabase: SupabaseClient): Promise<void> {
   const { data: alerts } = await supabase
     .from("bank_alerts")
-    .select("id, sender, subject, body, category, credit_card_id, bank_account_id")
+    .select("id, sender, subject, body, merchant, category, credit_card_id, bank_account_id")
     .eq("status", "new")
     .or(`parser_version.is.null,parser_version.lt.${PARSER_VERSION}`)
     .limit(200);
@@ -83,7 +83,8 @@ export async function readNewAlerts(supabase: SupabaseClient): Promise<void> {
       .update({
         kind: parsed.kind,
         amount: parsed.amount,
-        merchant: parsed.merchant,
+        // Keep a name filled in by hand when the email itself has none.
+        merchant: parsed.merchant ?? alert.merchant,
         bank: parsed.bank,
         card_last4: parsed.cardLast4,
         category,
