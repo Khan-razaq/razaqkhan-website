@@ -770,9 +770,39 @@ function PhoneSetup({ phoneKey }: { phoneKey: KeyInfo | null }) {
           </li>
         </ol>
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          The phone key only lets the shortcut add to your inbox. Making a new one turns the old phone key off; the
-          Gmail reader keeps working.
+          The phone key only lets the shortcuts add to your inbox and add cash expenses. Making a new one turns the old
+          phone key off; the Gmail reader keeps working.
         </p>
+        <div className="border-t border-gray-200 dark:border-gray-800 pt-3 space-y-2">
+          <p className="font-medium text-gray-900 dark:text-gray-100">Cash by voice with Siri</p>
+          <p>
+            Say <b>&quot;Hey Siri, cash expense&quot;</b>, then when asked, something like <b>&quot;12.50 at Trader
+            Joe&apos;s&quot;</b>. It&apos;s added straight to your expenses as cash, and Siri says what it added. Set it
+            up from the shortcut above, which already has your key:
+          </p>
+          <ol className="list-decimal pl-5 space-y-1">
+            <li>
+              In <b>Shortcuts</b>, press and hold <b>Send to Inbox</b> → <b>Duplicate</b>. Open the copy and rename it{" "}
+              <b>Cash expense</b> (that&apos;s what you&apos;ll say to Siri).
+            </li>
+            <li>
+              Remove <b>Take Screenshot</b> and <b>Extract Text</b> (tap their ⓧ), and add <b>Dictate Text</b> at the
+              top.
+            </li>
+            <li>
+              In <b>Get Contents of URL</b>, change the end of the address from <b>/api/bank-alert</b> to{" "}
+              <b>/api/cash</b>, and set the <b>text</b> field to <b>Dictated Text</b>.
+            </li>
+            <li>
+              Replace <b>Show Notification</b> with <b>Show Result</b> set to the result of Get Contents of URL, so
+              Siri reads out what it added.
+            </li>
+          </ol>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            It comes out of the bank account your last cash expense used (Chase Checking if none), and remembers the
+            category you last used for that store. Say it again by mistake within 2 minutes and it&apos;s added once.
+          </p>
+        </div>
         {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
         {made ? (
           <div className="space-y-2">
