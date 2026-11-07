@@ -72,12 +72,16 @@ export default function InboxClient({
   phoneKey,
   people,
   friends,
+  statementsDue,
+  neverCheckedStatements,
   supabaseUrl,
   publicKey,
 }: {
   alerts: Alert[];
   people: string[];
   friends: Friend[];
+  statementsDue: { name: string; checkedAt: string }[];
+  neverCheckedStatements: boolean;
   creditCards: Card[];
   bankAccounts: Account[];
   gmailKey: KeyInfo | null;
@@ -103,7 +107,33 @@ export default function InboxClient({
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Transactions read from your bank alert emails. Check each one, then add it to your expenses.
           </p>
+          <Link
+            href="/finance/statements"
+            className="inline-block mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            Check a statement for anything missed →
+          </Link>
         </header>
+
+        {/* About a month after a check, suggest the next one. */}
+        {(statementsDue.length > 0 || neverCheckedStatements) && (
+          <Link
+            href="/finance/statements"
+            className="block mb-6 rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 p-3 text-sm text-amber-800 dark:text-amber-300 hover:border-amber-400"
+          >
+            {statementsDue.length > 0 ? (
+              <>
+                Time to check this month&apos;s statement:{" "}
+                {statementsDue
+                  .map((d) => `${d.name} (last checked ${new Date(d.checkedAt).toLocaleDateString()})`)
+                  .join(", ")}
+                . →
+              </>
+            ) : (
+              <>Tip: once a month, check a card&apos;s statement against the Inbox to catch anything missed. →</>
+            )}
+          </Link>
+        )}
 
         {waiting.length === 0 ? (
           <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-8 text-center mb-6">

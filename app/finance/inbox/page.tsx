@@ -23,6 +23,14 @@ function peopleByUse(names: string[]): string[] {
   return [...counts.values()].sort((a, b) => b.count - a.count).map((p) => p.name);
 }
 
+// Statement checks done over a month ago, with the card or account's name.
+function dueForCheck(checks: { account_key: string; checked_at: string }[], names: Map<string, string>) {
+  const monthAgo = Date.now() - 31 * 24 * 60 * 60 * 1000;
+  return checks
+    .filter((c) => names.has(c.account_key) && Date.parse(c.checked_at) < monthAgo)
+    .map((c) => ({ name: names.get(c.account_key)!, checkedAt: c.checked_at }));
+}
+
 export default async function InboxPage() {
   const supabase = await createClient();
   const {
@@ -36,7 +44,7 @@ export default async function InboxPage() {
   // Read any alert emails the Gmail script dropped off since last time.
   await readNewAlerts(supabase);
 
-  const [alertsResult, cardsResult, accountsResult, keysResult, spentByResult, paidBackResult] = await Promise.all([
+  const [alertsResult, cardsResult, accountsResult, keysResult, spentByResult, paidBackResult, checksResult] = await Promise.all([
     supabase
       .from("bank_alerts")
       .select("id, sender, subject, email_date, kind, amount, merchant, bank, card_last4, category, credit_card_id, bank_account_id")
@@ -59,9 +67,18 @@ export default async function InboxPage() {
       .not("paid_back_by", "is", null)
       .order("income_date", { ascending: false })
       .limit(1000),
+    supabase.from("statement_checks").select("account_key, checked_at"),
   ]);
   const keys = keysResult.data || [];
   const friendSpending = spentByResult.data || [];
+
+  // Cards and accounts last checked against a statement over a month ago.
+  const names = new Map<string, string>([
+    ...(cardsResult.data || []).map((c) => [`card:${c.id}`, c.name] as [string, string]),
+    ...(accountsResult.data || []).map((a) => [`account:${a.id}`, a.name] as [string, string]),
+  ]);
+  const checks = checksResult.data || [];
+  const statementsDue = dueForCheck(checks, names);
 
   return (
     <InboxClient
@@ -72,6 +89,8 @@ export default async function InboxPage() {
       phoneKey={keys.find((k) => k.label === "phone") ?? null}
       people={peopleByUse(friendSpending.map((r) => r.spent_by as string))}
       friends={friendBalances(friendSpending, paidBackResult.data || [])}
+      statementsDue={statementsDue}
+      neverCheckedStatements={checks.length === 0}
       supabaseUrl={process.env.NEXT_PUBLIC_SUPABASE_URL!}
       publicKey={process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!}
     />
