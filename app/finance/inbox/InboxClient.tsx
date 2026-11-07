@@ -190,9 +190,11 @@ function AlertCard({
   const [fromAccount, setFromAccount] = useState(alert.bank_account_id ?? "");
   // Who spent it: empty is the user. Typing a name opens a box.
   const [spentBy, setSpentBy] = useState("");
-  // Money in: the friend paying back, picked for the user when the sender's
-  // name has exactly one friend's name in it.
-  const [paidBackBy, setPaidBackBy] = useState(() => (isIncome ? likelyFriend(alert.merchant ?? "", people) ?? "" : ""));
+  // Money in: the friend paying back. Until the user taps one, it's the
+  // friend whose name is in the sender's (worked out each render, so a friend
+  // named on another card a moment ago counts too).
+  const [paidBackChoice, setPaidBackBy] = useState<string | null>(null);
+  const paidBackBy = paidBackChoice ?? (isIncome ? likelyFriend(alert.merchant ?? "", people) ?? "" : "");
   const [typingName, setTypingName] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
