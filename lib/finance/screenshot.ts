@@ -73,7 +73,20 @@ function headingDate(m: RegExpMatchArray, takenAt: Date): string {
 // The purchases in a transaction-list screenshot, or [] when the screen
 // isn't one (no date headings with amounts under them).
 export function readTransactionList(text: string, takenAt: Date): ScreenshotItem[] {
+  return scanList(text, takenAt).items;
+}
+
+// Purchases above the first date heading: the list was scrolled so their
+// date is off the top of the screen. Their date can't be known, so they're
+// left out, and the phone says so.
+export function undatedAtTop(text: string, takenAt: Date): number {
+  const { items, undated } = scanList(text, takenAt);
+  return items.length ? undated : 0;
+}
+
+function scanList(text: string, takenAt: Date): { items: ScreenshotItem[]; undated: number } {
   const items: ScreenshotItem[] = [];
+  let undated = 0;
   let date: string | null = null;
   let name: string[] = [];
 
@@ -87,9 +100,12 @@ export function readTransactionList(text: string, takenAt: Date): ScreenshotItem
       name = [];
       continue;
     }
-    if (!date) continue; // above the first heading: the app's title bar
-
     const amount = line.match(AMOUNT);
+    if (!date) {
+      // Above the first heading: the app's title bar, or purchases whose date scrolled away.
+      if (amount) undated++;
+      continue;
+    }
     if (amount) {
       // The name is on the lines before the amount, or on the same line.
       const before = line.slice(0, amount.index).trim();
@@ -102,10 +118,11 @@ export function readTransactionList(text: string, takenAt: Date): ScreenshotItem
       name = [];
       continue;
     }
-    if (NOISE.test(line)) continue;
+    // Arrows and dots ("›", "•") aren't names.
+    if (NOISE.test(line) || !/[\p{L}\d]/u.test(line)) continue;
     name.push(line);
   }
-  return items;
+  return { items, undated };
 }
 
 // "WWW.BACKMARKET.CO" + "M" -> "WWW.BACKMARKET.COM"; "EXXONMOBIL" + "CAT
