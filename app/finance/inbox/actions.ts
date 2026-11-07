@@ -14,6 +14,10 @@ type Confirm = {
   // moves money from an account to a card, so it needs both.
   creditCardId: string | null;
   bankAccountId: string | null;
+  // Who spent it, when a friend used the card; empty is the user.
+  spentBy?: string | null;
+  // For money in: the friend paying back, if it's that.
+  paidBackBy?: string | null;
 };
 
 async function signedIn() {
@@ -74,9 +78,17 @@ export async function confirmAlert(input: Confirm): Promise<{ error: string | nu
     // account it arrived in.
     if (!input.bankAccountId) return { error: "Pick the account the money went into." };
     const source = input.description.trim() || "Money in";
+    const paidBackBy = (input.paidBackBy ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
     const { data: income, error } = await supabase
       .from("incomes")
-      .insert({ user_id: user.id, amount, source, income_date: input.date })
+      .insert({
+        user_id: user.id,
+        amount,
+        source,
+        income_date: input.date,
+        // A friend paying back what they spent on the card.
+        ...(paidBackBy ? { paid_back_by: paidBackBy } : {}),
+      })
       .select("id")
       .single();
     if (error || !income) return { error: error?.message ?? "Couldn't save the income." };
@@ -95,6 +107,10 @@ export async function confirmAlert(input: Confirm): Promise<{ error: string | nu
     if (alert.kind === "refund") {
       return { error: "A refund isn't an expense. Dismiss it." };
     }
+    if (alert.kind === "own_transfer") {
+      return { error: "Money moved between your own accounts isn't an expense. Dismiss it." };
+    }
+    const spentBy = (input.spentBy ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
     if (!input.creditCardId && !input.bankAccountId) return { error: "Pick the card or account." };
     const category = (CATEGORIES as readonly string[]).includes(input.category) ? input.category : "Other";
     const description = input.description.trim() || "Bank alert";
@@ -116,6 +132,8 @@ export async function confirmAlert(input: Confirm): Promise<{ error: string | nu
         expense_date: input.date,
         credit_card_id: input.creditCardId,
         bank_account_id: input.creditCardId ? null : input.bankAccountId,
+        // Left out for "me", so an expense never needs the column to exist.
+        ...(spentBy && !/^me$/i.test(spentBy) ? { spent_by: spentBy } : {}),
       })
       .select("id")
       .single();

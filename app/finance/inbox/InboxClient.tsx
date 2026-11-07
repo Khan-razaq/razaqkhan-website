@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CATEGORIES } from "@/lib/finance/alerts";
 import { gmailScript } from "@/lib/finance/gmailScript";
+import { likelyFriend, type Friend } from "@/lib/finance/friends";
 import { confirmAlert, createGmailKey, dismissAlert } from "./actions";
 
 type Alert = {
@@ -33,6 +34,11 @@ const primaryButton =
 const secondaryButton =
   "px-3 py-1.5 rounded-md text-sm border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
 
+const chipOn =
+  "px-2.5 py-1 rounded-full text-xs font-medium bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 cursor-pointer";
+const chipOff =
+  "px-2.5 py-1 rounded-full text-xs border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800";
+
 const BANK_NAMES: Record<string, string> = {
   citi: "Citi",
   amex: "Amex",
@@ -45,6 +51,7 @@ const BANK_NAMES: Record<string, string> = {
 const KIND_LABELS: Record<string, { label: string; className: string }> = {
   purchase: { label: "Purchase", className: "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300" },
   transfer: { label: "Sent", className: "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300" },
+  own_transfer: { label: "Between your accounts", className: "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300" },
   card_payment: { label: "Card payment", className: "bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300" },
   income: { label: "Money in", className: "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300" },
   refund: { label: "Refund", className: "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300" },
@@ -63,10 +70,18 @@ export default function InboxClient({
   bankAccounts,
   gmailKey,
   phoneKey,
+  people,
+  friends,
+  statementsDue,
+  neverCheckedStatements,
   supabaseUrl,
   publicKey,
 }: {
   alerts: Alert[];
+  people: string[];
+  friends: Friend[];
+  statementsDue: { name: string; checkedAt: string }[];
+  neverCheckedStatements: boolean;
   creditCards: Card[];
   bankAccounts: Account[];
   gmailKey: KeyInfo | null;
@@ -92,7 +107,33 @@ export default function InboxClient({
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Transactions read from your bank alert emails. Check each one, then add it to your expenses.
           </p>
+          <Link
+            href="/finance/statements"
+            className="inline-block mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            Check a statement for anything missed →
+          </Link>
         </header>
+
+        {/* About a month after a check, suggest the next one. */}
+        {(statementsDue.length > 0 || neverCheckedStatements) && (
+          <Link
+            href="/finance/statements"
+            className="block mb-6 rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 p-3 text-sm text-amber-800 dark:text-amber-300 hover:border-amber-400"
+          >
+            {statementsDue.length > 0 ? (
+              <>
+                Time to check this month&apos;s statement:{" "}
+                {statementsDue
+                  .map((d) => `${d.name} (last checked ${new Date(d.checkedAt).toLocaleDateString()})`)
+                  .join(", ")}
+                . →
+              </>
+            ) : (
+              <>Tip: once a month, check a card&apos;s statement against the Inbox to catch anything missed. →</>
+            )}
+          </Link>
+        )}
 
         {waiting.length === 0 ? (
           <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-8 text-center mb-6">
@@ -103,10 +144,15 @@ export default function InboxClient({
         ) : (
           <div className="space-y-2 mb-6">
             {waiting.map((alert) => (
-              <AlertCard key={alert.id} alert={alert} creditCards={creditCards} bankAccounts={bankAccounts} />
+              <AlertCard key={alert.id} alert={alert} creditCards={creditCards} bankAccounts={bankAccounts} people={people} />
             ))}
           </div>
         )}
+        <datalist id="people-names">
+          {people.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
 
         {skipped.length > 0 && (
           <section className="mb-6">
@@ -120,12 +166,14 @@ export default function InboxClient({
             {showSkipped && (
               <div className="space-y-2 mt-2">
                 {skipped.map((alert) => (
-                  <AlertCard key={alert.id} alert={alert} creditCards={creditCards} bankAccounts={bankAccounts} />
+                  <AlertCard key={alert.id} alert={alert} creditCards={creditCards} bankAccounts={bankAccounts} people={people} />
                 ))}
               </div>
             )}
           </section>
         )}
+
+        <FriendsPanel friends={friends} />
 
         <GmailSetup gmailKey={gmailKey} supabaseUrl={supabaseUrl} publicKey={publicKey} />
         <PhoneSetup phoneKey={phoneKey} />
@@ -134,13 +182,29 @@ export default function InboxClient({
   );
 }
 
-function AlertCard({ alert, creditCards, bankAccounts }: { alert: Alert; creditCards: Card[]; bankAccounts: Account[] }) {
+function AlertCard({
+  alert,
+  creditCards,
+  bankAccounts,
+  people,
+}: {
+  alert: Alert;
+  creditCards: Card[];
+  bankAccounts: Account[];
+  people: string[];
+}) {
   const router = useRouter();
   const kind = alert.kind ?? "unreadable";
   const isSkipped = kind === "ignore";
   const isIncome = kind === "income";
   const isRefund = kind === "refund";
+  const isOwnTransfer = kind === "own_transfer";
   const isCardPayment = kind === "card_payment";
+  // Nothing to add for these: a note and Dismiss.
+  const isNoteOnly = isRefund || isOwnTransfer;
+  // Friends use the card too: purchases ask who spent it. (Zelle sent from
+  // the user's own account is theirs.)
+  const asksWho = !isCardPayment && !isIncome && kind !== "transfer";
 
   // Skipped emails start folded: one tap opens the form if one was real.
   const [open, setOpen] = useState(!isSkipped);
@@ -154,6 +218,14 @@ function AlertCard({ alert, creditCards, bankAccounts }: { alert: Alert; creditC
   );
   const [paidCard, setPaidCard] = useState(alert.credit_card_id ?? "");
   const [fromAccount, setFromAccount] = useState(alert.bank_account_id ?? "");
+  // Who spent it: empty is the user. Typing a name opens a box.
+  const [spentBy, setSpentBy] = useState("");
+  // Money in: the friend paying back. Until the user taps one, it's the
+  // friend whose name is in the sender's (worked out each render, so a friend
+  // named on another card a moment ago counts too).
+  const [paidBackChoice, setPaidBackBy] = useState<string | null>(null);
+  const paidBackBy = paidBackChoice ?? (isIncome ? likelyFriend(alert.merchant ?? "", people) ?? "" : "");
+  const [typingName, setTypingName] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -171,6 +243,8 @@ function AlertCard({ alert, creditCards, bankAccounts }: { alert: Alert; creditC
       category,
       creditCardId: isCardPayment ? paidCard || null : paidWith.startsWith("card:") ? paidWith.slice(5) : null,
       bankAccountId: isCardPayment || isIncome ? fromAccount || null : paidWith.startsWith("account:") ? paidWith.slice(8) : null,
+      spentBy: asksWho ? spentBy.trim() || null : null,
+      paidBackBy: isIncome ? paidBackBy || null : null,
     });
     setBusy(false);
     if (result.error) setError(result.error);
@@ -213,22 +287,29 @@ function AlertCard({ alert, creditCards, bankAccounts }: { alert: Alert; creditC
         </button>
       )}
 
-      {open && isRefund && (
+      {open && isNoteOnly && (
         <div className="mt-3 flex items-center justify-between gap-3">
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            A refund isn&apos;t an expense. Dismiss it, or delete the original purchase on the{" "}
-            <Link href="/finance" className="text-blue-600 dark:text-blue-400 hover:underline">
-              dashboard
-            </Link>
-            .
-          </p>
+          {isOwnTransfer ? (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Money moved between your own accounts, so it isn&apos;t spending and there&apos;s nothing to add.
+              Dismiss it.
+            </p>
+          ) : (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              A refund isn&apos;t an expense. Dismiss it, or delete the original purchase on the{" "}
+              <Link href="/finance" className="text-blue-600 dark:text-blue-400 hover:underline">
+                dashboard
+              </Link>
+              .
+            </p>
+          )}
           <button onClick={handleDismiss} disabled={busy} className={secondaryButton}>
             Dismiss
           </button>
         </div>
       )}
 
-      {open && !isRefund && (
+      {open && !isNoteOnly && (
         <div className="mt-3 space-y-2">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <input
@@ -319,6 +400,71 @@ function AlertCard({ alert, creditCards, bankAccounts }: { alert: Alert; creditC
                   ))}
                 </optgroup>
               </select>
+            </div>
+          )}
+
+          {isIncome && people.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">Paying you back?</span>
+              <button type="button" onClick={() => setPaidBackBy("")} className={!paidBackBy ? chipOn : chipOff}>
+                No
+              </button>
+              {people.slice(0, 8).map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => setPaidBackBy(name)}
+                  className={paidBackBy === name ? chipOn : chipOff}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {asksWho && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">Who spent it?</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSpentBy("");
+                  setTypingName(false);
+                }}
+                className={!spentBy && !typingName ? chipOn : chipOff}
+              >
+                Me
+              </button>
+              {/* The names used most, so a friend is one tap. */}
+              {people.slice(0, 5).map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => {
+                    setSpentBy(name);
+                    setTypingName(false);
+                  }}
+                  className={!typingName && spentBy === name ? chipOn : chipOff}
+                >
+                  {name}
+                </button>
+              ))}
+              {typingName ? (
+                <input
+                  autoFocus
+                  value={spentBy}
+                  onChange={(e) => setSpentBy(e.target.value)}
+                  placeholder="Their name"
+                  aria-label="Who spent it"
+                  list="people-names"
+                  maxLength={60}
+                  className={`${inputClass} w-40`}
+                />
+              ) : (
+                <button type="button" onClick={() => setTypingName(true)} className={chipOff}>
+                  Someone else…
+                </button>
+              )}
             </div>
           )}
 
@@ -468,6 +614,76 @@ function GmailSetup({
         )}
       </div>
     </details>
+  );
+}
+
+// What each friend owes: what they spent on the card minus what they've paid
+// back. Tap a friend to see each purchase and payback.
+function FriendsPanel({ friends }: { friends: Friend[] }) {
+  const [openName, setOpenName] = useState<string | null>(null);
+  if (friends.length === 0) return null;
+  const totalOwed = friends.reduce((sum, f) => sum + Math.max(f.owes, 0), 0);
+
+  return (
+    <section className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 mb-6">
+      <div className="flex items-baseline justify-between mb-2">
+        <h2 className="text-sm font-medium text-gray-900 dark:text-gray-100">Friends owe you</h2>
+        <span className="text-sm font-semibold text-teal-600 dark:text-teal-400">${totalOwed.toFixed(2)}</span>
+      </div>
+      <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+        {friends.map((friend) => {
+          const isOpen = openName === friend.name;
+          return (
+            <li key={friend.name}>
+              <button
+                type="button"
+                onClick={() => setOpenName(isOpen ? null : friend.name)}
+                className="w-full flex items-center justify-between py-2 text-left cursor-pointer"
+                aria-expanded={isOpen}
+              >
+                <span className="text-sm text-gray-900 dark:text-gray-100">
+                  {isOpen ? "▾" : "▸"} {friend.name}
+                </span>
+                <span
+                  className={`text-sm font-medium ${
+                    friend.owes > 0 ? "text-teal-600 dark:text-teal-400" : "text-gray-500 dark:text-gray-400"
+                  }`}
+                >
+                  {friend.owes > 0
+                    ? `owes $${friend.owes.toFixed(2)}`
+                    : friend.owes < 0
+                      ? `paid $${(-friend.owes).toFixed(2)} extra`
+                      : "settled"}
+                </span>
+              </button>
+              {isOpen && (
+                <div className="pb-3 pl-4">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                    Spent ${friend.spent.toFixed(2)} · paid back ${friend.paidBack.toFixed(2)}
+                  </p>
+                  <ul className="space-y-1">
+                    {friend.entries.map((entry) => (
+                      <li key={`${entry.kind}-${entry.id}`} className="flex items-center justify-between gap-3 text-xs">
+                        <span className="min-w-0 truncate text-gray-700 dark:text-gray-300">
+                          <span className="text-gray-400 dark:text-gray-500">{entry.date}</span> {entry.description}
+                        </span>
+                        <span
+                          className={`shrink-0 ${
+                            entry.kind === "paid_back" ? "text-green-600 dark:text-green-400" : "text-gray-900 dark:text-gray-100"
+                          }`}
+                        >
+                          {entry.kind === "paid_back" ? "paid back " : ""}${entry.amount.toFixed(2)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 

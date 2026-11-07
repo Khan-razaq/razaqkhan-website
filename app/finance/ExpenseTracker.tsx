@@ -40,6 +40,7 @@ type Expense = {
   expense_date: string;
   bank_account_id: string | null;
   credit_card_id: string | null;
+  spent_by?: string | null;
 };
 
 type Deposit = {
@@ -756,6 +757,9 @@ export default function ExpenseTracker({
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                       {expense.category} · {expense.payment_method} ·{" "}
                       {expenseSourceLabel(expense)} · {expense.expense_date}
+                      {expense.spent_by && (
+                        <span className="text-teal-600 dark:text-teal-400"> · {expense.spent_by}</span>
+                      )}
                     </p>
                   </div>
                   <div className="flex items-center gap-3 ml-4">
