@@ -10,6 +10,7 @@ import {
   parseAlert,
   type Bank,
 } from "./alerts";
+import { SCREENSHOT_SENDER, SCREENSHOT_SUBJECT, readTransactionList, screenshotBank } from "./screenshot";
 
 type Account = { id: string; name: string; issuer?: string };
 
@@ -27,6 +28,8 @@ const BANK_WORDS: Record<Bank, RegExp> = {
 // version of the reader read), and fills in what they say: kind, amount,
 // merchant, a category, and the card or account they're probably about.
 export async function readNewAlerts(supabase: SupabaseClient): Promise<void> {
+  await splitScreenshots(supabase);
+
   const { data: alerts } = await supabase
     .from("bank_alerts")
     .select("id, sender, subject, body, merchant, category, credit_card_id, bank_account_id")
@@ -93,6 +96,97 @@ export async function readNewAlerts(supabase: SupabaseClient): Promise<void> {
         parser_version: PARSER_VERSION,
       })
       .eq("id", alert.id);
+  }
+}
+
+const BANK_NAMES: Record<Bank, string> = {
+  amex: "Amex",
+  citi: "Citi",
+  capitalone: "Capital One",
+  discover: "Discover",
+  chase: "Chase",
+  santander: "Santander",
+};
+
+// A screenshot of a bank app's transaction list holds several purchases.
+// Each one the inbox doesn't already have becomes its own alert, written the
+// way an alert email would say it, so the email reader reads it. The
+// screenshot itself is then put away.
+//
+// "Already have" means an alert from the same bank for the same amount within
+// a day of the purchase, from any source (a notification screenshot, an
+// email, an earlier screenshot of the same list). Counting, not just
+// matching: two $5.25 coffees on one day stay two.
+async function splitScreenshots(supabase: SupabaseClient): Promise<void> {
+  const { data: shots } = await supabase
+    .from("bank_alerts")
+    .select("id, user_id, message_id, body, email_date")
+    .eq("status", "new")
+    .eq("sender", SCREENSHOT_SENDER)
+    .eq("subject", SCREENSHOT_SUBJECT)
+    .is("parser_version", null)
+    .limit(50);
+
+  for (const shot of shots ?? []) {
+    const items = readTransactionList(shot.body, new Date(shot.email_date));
+    const bank = screenshotBank(shot.body);
+    // Not a transaction list (a notification, say): the email reader reads it as it is.
+    if (!items.length || !bank) continue;
+
+    const dayMs = 24 * 60 * 60 * 1000;
+    const noon = (date: string) => new Date(`${date}T17:00:00Z`); // midday in Boston
+    const times = items.map((i) => noon(i.date).getTime());
+    const { data: existing } = await supabase
+      .from("bank_alerts")
+      .select("id, amount, email_date, kind")
+      .eq("bank", bank)
+      .neq("id", shot.id)
+      .gte("email_date", new Date(Math.min(...times) - 2 * dayMs).toISOString())
+      .lte("email_date", new Date(Math.max(...times) + 2 * dayMs).toISOString());
+    const known = (existing ?? []).filter((a) => a.kind !== "ignore" && a.amount !== null);
+    const used = new Set<string>();
+
+    const rows = [];
+    for (const item of items) {
+      const amount = Math.abs(item.amount);
+      const at = noon(item.date).getTime();
+      const match = known.find(
+        (a) =>
+          !used.has(a.id) &&
+          Math.abs(Number(a.amount) - amount) < 0.005 &&
+          Math.abs(new Date(a.email_date).getTime() - at) <= 1.5 * dayMs
+      );
+      if (match) {
+        used.add(match.id);
+        continue;
+      }
+      const money = `$${amount.toFixed(2)}`;
+      const body =
+        item.amount > 0
+          ? `A ${money} purchase at ${item.merchant}`
+          : /payment/i.test(item.merchant)
+            ? `We received a payment. Payment Amount: ${money}`
+            : `A credit of ${money} from ${item.merchant}`;
+      rows.push({
+        user_id: shot.user_id,
+        // (The very same screenshot sent twice never gets this far: the
+        // shortcut endpoint names a screenshot by its text.)
+        message_id: `${shot.message_id}:${rows.length}`,
+        sender: SCREENSHOT_SENDER,
+        subject: `From a screenshot of the ${BANK_NAMES[bank]} app`,
+        body: `${BANK_NAMES[bank]}\n${body}`,
+        email_date: noon(item.date).toISOString(),
+      });
+    }
+
+    if (rows.length) {
+      const { error } = await supabase.from("bank_alerts").upsert(rows, { onConflict: "user_id,message_id", ignoreDuplicates: true });
+      if (error) continue; // try again next time
+    }
+    await supabase
+      .from("bank_alerts")
+      .update({ status: "dismissed", kind: "ignore", bank, parser_version: PARSER_VERSION, reviewed_at: new Date().toISOString() })
+      .eq("id", shot.id);
   }
 }
 

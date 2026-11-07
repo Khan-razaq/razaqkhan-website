@@ -164,11 +164,14 @@ export async function dismissAlert(id: string): Promise<{ error: string | null }
   return { error: error?.message ?? null };
 }
 
-// A new key for the Gmail script (any old key stops working).
-export async function createGmailKey(): Promise<{ key: string | null; error: string | null }> {
+// A new key for the Gmail script or the phone shortcut (that device's old key
+// stops working; the other device's keeps working).
+export async function createGmailKey(
+  label: "gmail" | "phone" = "gmail"
+): Promise<{ key: string | null; error: string | null }> {
   const { supabase, user } = await signedIn();
   if (!user) return { key: null, error: "Signed out. Sign in and try again." };
-  const { data, error } = await supabase.rpc("create_bank_alert_key");
+  const { data, error } = await supabase.rpc("create_bank_alert_key", { p_label: label });
   revalidatePath("/finance/inbox");
   return { key: (data as string | null) ?? null, error: error?.message ?? null };
 }

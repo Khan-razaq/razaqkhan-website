@@ -23,6 +23,7 @@ type Alert = {
 };
 
 type Card = { id: string; name: string; issuer: string };
+type KeyInfo = { created_at: string; last_used_at: string | null };
 type Account = { id: string; name: string };
 
 const inputClass =
@@ -61,13 +62,15 @@ export default function InboxClient({
   creditCards,
   bankAccounts,
   gmailKey,
+  phoneKey,
   supabaseUrl,
   publicKey,
 }: {
   alerts: Alert[];
   creditCards: Card[];
   bankAccounts: Account[];
-  gmailKey: { created_at: string; last_used_at: string | null } | null;
+  gmailKey: KeyInfo | null;
+  phoneKey: KeyInfo | null;
   supabaseUrl: string;
   publicKey: string;
 }) {
@@ -125,6 +128,7 @@ export default function InboxClient({
         )}
 
         <GmailSetup gmailKey={gmailKey} supabaseUrl={supabaseUrl} publicKey={publicKey} />
+        <PhoneSetup phoneKey={phoneKey} />
       </div>
     </main>
   );
@@ -338,7 +342,7 @@ function GmailSetup({
   supabaseUrl,
   publicKey,
 }: {
-  gmailKey: { created_at: string; last_used_at: string | null } | null;
+  gmailKey: KeyInfo | null;
   supabaseUrl: string;
   publicKey: string;
 }) {
@@ -457,6 +461,131 @@ function GmailSetup({
               onFocus={(e) => e.target.select()}
             />
           </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
+// The iPhone shortcut: double-tap the back of the phone on an Amex
+// notification or transaction list, and the screen's text comes here.
+function PhoneSetup({ phoneKey }: { phoneKey: KeyInfo | null }) {
+  const router = useRouter();
+  const [made, setMade] = useState<{ key: string; url: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState("");
+  // Asked on the page, not with a browser popup: some browsers block those.
+  const [confirming, setConfirming] = useState(false);
+
+  const handleCreate = async () => {
+    setConfirming(false);
+    setBusy(true);
+    setError("");
+    const result = await createGmailKey("phone");
+    setBusy(false);
+    if (!result.key) {
+      setError(result.error ?? "Couldn't make a key.");
+      return;
+    }
+    setMade({ key: result.key, url: `${window.location.origin}/api/bank-alert` });
+    router.refresh();
+  };
+
+  const copy = async (what: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(what);
+    } catch {
+      setError("Couldn't copy. Select the text and copy it instead.");
+    }
+  };
+
+  return (
+    <details
+      open={!phoneKey}
+      className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 text-sm text-gray-700 dark:text-gray-300"
+    >
+      <summary className="cursor-pointer font-medium text-gray-900 dark:text-gray-100">
+        Phone shortcut{" "}
+        <span className="font-normal text-xs text-gray-500 dark:text-gray-400">
+          {phoneKey
+            ? phoneKey.last_used_at
+              ? `· last sent ${new Date(phoneKey.last_used_at).toLocaleString()}`
+              : "· key made, nothing sent yet"
+            : "· not set up"}
+        </span>
+      </summary>
+      <div className="mt-4 space-y-3">
+        <p>
+          For banks that only send app notifications (Amex). When one shows up, or on the app&apos;s list of
+          transactions, <b>double-tap the back of your iPhone</b>: it takes a screenshot, reads the text on the phone,
+          and sends the text here. Set it up once:
+        </p>
+        <ol className="list-decimal pl-5 space-y-1">
+          <li>
+            Click <b>{phoneKey ? "Make a new phone key" : "Make my phone key"}</b> below.
+          </li>
+          <li>
+            In the <b>Shortcuts</b> app tap <b>+</b>, name it <b>Send to Inbox</b>, and add these actions in order:{" "}
+            <b>Take Screenshot</b>, <b>Extract Text from Image</b>, <b>Get Contents of URL</b>,{" "}
+            <b>Show Notification</b>.
+          </li>
+          <li>
+            In <b>Get Contents of URL</b>: paste the address below. Tap the arrow to show more: Method <b>POST</b>,
+            Request Body <b>JSON</b>. Add a Text field named <b>key</b> with the key below, and a Text field named{" "}
+            <b>text</b> set to the result of the Extract Text action (tap the field, then pick it from the list
+            above the keyboard).
+          </li>
+          <li>
+            In <b>Show Notification</b>, set the text to the result of Get Contents of URL, so you see what was
+            sent.
+          </li>
+          <li>
+            iPhone <b>Settings → Accessibility → Touch → Back Tap → Double Tap</b> → choose <b>Send to Inbox</b>.
+          </li>
+        </ol>
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          The phone key only lets the shortcut add to your inbox. Making a new one turns the old phone key off; the
+          Gmail reader keeps working.
+        </p>
+        {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+        {made ? (
+          <div className="space-y-2">
+            {(
+              [
+                ["address", made.url],
+                ["key", made.key],
+              ] as const
+            ).map(([what, value]) => (
+              <div key={what} className="flex items-center gap-2">
+                <code className="flex-1 min-w-0 break-all text-xs bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded p-2 select-all">
+                  {value}
+                </code>
+                <button onClick={() => copy(what, value)} className={secondaryButton}>
+                  {copied === what ? "Copied ✓" : `Copy ${what}`}
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : confirming ? (
+          <div className="space-y-2">
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              Your current phone shortcut will stop working until you paste the new key.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={handleCreate} disabled={busy} className={primaryButton}>
+                Yes, make a new phone key
+              </button>
+              <button onClick={() => setConfirming(false)} className={secondaryButton}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={phoneKey ? () => setConfirming(true) : handleCreate} disabled={busy} className={primaryButton}>
+            {busy ? "Making…" : phoneKey ? "Make a new phone key" : "Make my phone key"}
+          </button>
         )}
       </div>
     </details>

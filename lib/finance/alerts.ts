@@ -10,7 +10,9 @@
 // Bump PARSER_VERSION after changing the rules: saved emails read with an
 // older version are read again.
 
-export const PARSER_VERSION = 6;
+import { SCREENSHOT_SENDER, screenshotBank } from "./screenshot";
+
+export const PARSER_VERSION = 7;
 
 export type AlertKind = "purchase" | "refund" | "transfer" | "card_payment" | "income" | "ignore" | "unreadable";
 
@@ -85,7 +87,14 @@ function storeCase(s: string): string {
 }
 
 export function tidyMerchant(raw: string): string {
-  const words = raw.replace(PROCESSOR_PREFIX, "").replace(/\s*\*\s*/g, " ").trim().split(/\s+/);
+  const words = raw
+    .replace(PROCESSOR_PREFIX, "")
+    .replace(/\s*\*\s*/g, " ")
+    // "WWW.BACKMARKET.COM" -> "BACKMARKET"
+    .replace(/^www\./i, "")
+    .replace(/\.(com|co|net|org)\b/i, "")
+    .trim()
+    .split(/\s+/);
   let area: string | null = null;
 
   // Only a name ending in a country or state code is in the network layout;
@@ -141,7 +150,7 @@ const PATTERNS: { kind: AlertKind; re: RegExp; amount: number; who?: number }[] 
 
   // Paying off a card ("We received your $250.00 payment", "Payment of $250 posted",
   // Amex: "We received your payment. … Payment amount: $518.24")
-  { kind: "card_payment", re: new RegExp(`received your payment[\\s\\S]{0,400}?payment amount:?\\s*${MONEY}`, "i"), amount: 1 },
+  { kind: "card_payment", re: new RegExp(`received (?:your|a) payment[\\s\\S]{0,400}?payment amount:?\\s*${MONEY}`, "i"), amount: 1 },
   { kind: "card_payment", re: new RegExp(`(?:received|posted|processed|applied)[^.\\n]{0,40}?payment of ${MONEY}`, "i"), amount: 1 },
   { kind: "card_payment", re: new RegExp(`(?:received|posted|processed)[^.\\n]{0,20}?${MONEY}[^.\\n]{0,10}?payment`, "i"), amount: 1 },
   { kind: "card_payment", re: new RegExp(`payment of ${MONEY}[^.\\n]{0,40}?(?:has been |was )?(?:received|posted|processed|applied|credited)`, "i"), amount: 1 },
@@ -164,6 +173,8 @@ const PATTERNS: { kind: AlertKind; re: RegExp; amount: number; who?: number }[] 
   // Purchases
   { kind: "purchase", re: new RegExp(`(?:a |an |your )?${MONEY} (?:transaction|purchase|charge|debit card transaction|card transaction)(?: was)?(?: made| approved| authorized)?(?: at| with| to| from)? ([^\\n]+)`, "i"), amount: 1, who: 2 },
   { kind: "purchase", re: new RegExp(`(?:transaction|purchase|charge|charged|spent)(?: of)? ${MONEY}(?: was made| was approved)? (?:at|with|to|from|on) ([^\\n]+)`, "i"), amount: 1, who: 2 },
+  // "Large Purchase Approved: $89.00 at SWEETGREEN"
+  { kind: "purchase", re: new RegExp(`(?:transaction|purchase|charge) (?:approved|authorized|made):? ${MONEY} (?:at|with) ([^\\n]+)`, "i"), amount: 1, who: 2 },
   { kind: "purchase", re: new RegExp(`you made a ${MONEY} (?:transaction|purchase|payment) (?:with|at|to) ([^\\n]+)`, "i"), amount: 1, who: 2 },
   // "at STAR MARKET 123, a pending authorization or purchase in the amount of $54.12"
   { kind: "purchase", re: new RegExp(`\\bat ([^,\\n]{2,60}),? (?:a |an )?(?:pending authorization or purchase|purchase|charge|transaction|authorization) in the amount of ${MONEY}`, "i"), amount: 2, who: 1 },
@@ -175,7 +186,8 @@ const PATTERNS: { kind: AlertKind; re: RegExp; amount: number; who?: number }[] 
 const LOOKS_LIKE_TRANSACTION = /\b(transaction|purchase|charge[ds]?|spent|approved|authori[sz]ed|debit|sent|zelle|deposit(ed)?|refund|payment (received|posted))\b/i;
 
 export function parseAlert(email: { sender: string; subject: string; body: string }): ParsedAlert {
-  const bank = bankOf(email.sender);
+  // A phone screenshot has no sender address; the screen names the bank.
+  const bank = bankOf(email.sender) ?? (email.sender === SCREENSHOT_SENDER ? screenshotBank(email.body) : null);
   // Subject first: it's usually the clearest line.
   const text = `${email.subject}\n${email.body}`
     .replace(/ /g, " ")
