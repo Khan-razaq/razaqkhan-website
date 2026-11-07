@@ -1,0 +1,286 @@
+// Reads a bank alert email: is it a transaction, and if so how much, where,
+// and on which card or account.
+//
+// Free and rule-based (no AI service): it looks for the phrases banks use in
+// transaction alerts ("A $12.50 transaction was made at …", "You sent $40 to
+// …") and skips promotions, statements and reminders. When it sees an amount
+// but can't tell what the email is, it says "unreadable" rather than guess,
+// so the email still shows up for a person to look at.
+//
+// Bump PARSER_VERSION after changing the rules: saved emails read with an
+// older version are read again.
+
+import { SCREENSHOT_SENDER, screenshotBank } from "./screenshot";
+
+export const PARSER_VERSION = 7;
+
+export type AlertKind = "purchase" | "refund" | "transfer" | "card_payment" | "income" | "ignore" | "unreadable";
+
+export type Bank = "citi" | "amex" | "capitalone" | "discover" | "chase" | "santander";
+
+export type ParsedAlert = {
+  kind: AlertKind;
+  amount: number | null;
+  merchant: string | null;
+  bank: Bank | null;
+  cardLast4: string | null;
+};
+
+const BANKS: { bank: Bank; re: RegExp }[] = [
+  { bank: "citi", re: /citi(bank|cards)?\.com/i },
+  { bank: "amex", re: /americanexpress\.com|aexp\.com/i },
+  { bank: "capitalone", re: /capitalone\.com/i },
+  { bank: "discover", re: /discover\.com/i },
+  { bank: "chase", re: /chase\.com/i },
+  { bank: "santander", re: /santander/i },
+];
+
+export function bankOf(sender: string): Bank | null {
+  return BANKS.find((b) => b.re.test(sender))?.bank ?? null;
+}
+
+// Newsletters, offers, statements, reminders, security notices.
+const NOT_A_TRANSACTION =
+  /\b(statement is (ready|available)|your (monthly )?statement|payment (is )?due|due date|upcoming payment|payment reminder|autopay (is )?(scheduled|set up|on)|scheduled payment|minimum payment|credit (score|limit)|offer|rewards?|earn \$?\d|could be yours|flex pay|eligible for|refer|pre-?approval|online access|ready to manage|new statement|travel guide|is here|cash ?back|points|bonus|% (apr|off)|apply now|pre-?approved|upgrade|survey|feedback|tell us|how did we do|sign[- ]?in|log ?in|password|verification code|one-time (code|passcode)|security alert|new device|profile (was )?updated|e-?mail address (was )?(changed|updated)|paperless|privacy|terms|webinar|invite)\b/i;
+
+const MONEY = String.raw`\$\s?([\d,]+(?:\.\d{2})?)`;
+
+function money(s: string | undefined): number | null {
+  if (!s) return null;
+  const n = Number(s.replace(/,/g, ""));
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
+}
+
+// "STARBUCKS STORE 1234 on 10/29/2026 at 3:41 PM" -> "STARBUCKS STORE 1234"
+function cleanMerchant(raw: string | undefined): string | null {
+  // Citi's alert names the card, not the store: "made on your Costco Anywhere account".
+  if (!raw || /^(on )?your\b/i.test(raw.trim())) return null;
+  const m = raw
+    .replace(/\s+/g, " ")
+    .replace(/\s*\((?:confirmation|ref|reference)[^)]*\)/i, "")
+    .split(/\s+(?:on|at \d|was|has|for|using|with your|from your|ending|card|account|\d{1,2}\/\d{1,2})\b|[.,;!|]\s|\s-\s|\s{2,}/i)[0]
+    .replace(/[.,;:!]+$/, "")
+    .trim();
+  return m.length >= 2 && m.length <= 60 ? m : null;
+}
+
+// Card networks write the store as NAME, store number, CITY, state, country:
+// "DUNKIN #356492 ROXBURY US", "SHELL OIL 5744 QUINCY MA US", "SQ *BLUE BOTTLE
+// BOSTON MA". Store numbers mean nothing to a person; the brand and the area
+// do: "Dunkin · Roxbury".
+const PROCESSOR_PREFIX = /^(?:sq|tst|py|sp|pp|paypal|dd|ctlp|wpy|bt|pos|ls|fs|ic|in) ?\* ?/i;
+const US_STATES = new Set(
+  "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY".split(" ")
+);
+const COUNTRIES = new Set(["US", "USA", "IN", "CA", "GB", "MX"]);
+// First words of two-word places ("NEW DELHI", "SAN DIEGO"). Others show
+// shortened ("FALL RIVER" -> "River"), still a hint of where.
+const PLACE_START = /^(new|san|santa|los|las|el|st|saint|fort|ft|port|mount|mt|north|south|east|west|lake|palm|salt|grand|long|cape|jamaica|hyde)$/i;
+const STORE_WORDS: Record<string, string> = { WHSE: "Warehouse", MKTPLACE: "Marketplace", MKTP: "Marketplace", MKT: "Market", RSTRNT: "Restaurant" };
+
+function storeCase(s: string): string {
+  if (s !== s.toUpperCase()) return s;
+  return s
+    .split(" ")
+    .map((w) => STORE_WORDS[w] ?? w.toLowerCase().replace(/(^|[-/&])(\p{L})/gu, (_, sep, c) => sep + c.toUpperCase()))
+    .join(" ");
+}
+
+export function tidyMerchant(raw: string): string {
+  const words = raw
+    .replace(PROCESSOR_PREFIX, "")
+    .replace(/\s*\*\s*/g, " ")
+    // "WWW.BACKMARKET.COM" -> "BACKMARKET"
+    .replace(/^www\./i, "")
+    .replace(/\.(com|co|net|org)\b/i, "")
+    .trim()
+    .split(/\s+/);
+  let area: string | null = null;
+
+  // Only a name ending in a country or state code is in the network layout;
+  // "QUINCY GAS" isn't, and there's no telling its city from its name.
+  const last = () => words[words.length - 1];
+  if (words.length >= 3 && raw === raw.toUpperCase() && (COUNTRIES.has(last()) || US_STATES.has(last()))) {
+    if (COUNTRIES.has(last())) words.pop();
+    if (words.length >= 3 && US_STATES.has(last())) words.pop();
+    if (words.length >= 2) {
+      area = words.pop()!;
+      if (words.length >= 2 && PLACE_START.test(words[words.length - 1])) area = `${words.pop()} ${area}`;
+    }
+  }
+
+  // Store numbers and terminal codes: "#356492", "5744", "Q35", "STORE 12".
+  const name = words
+    .filter((w) => !/^#|^[A-Z]{0,2}\d{2,}$|^\d+$/i.test(w))
+    .join(" ")
+    .replace(/\bSTORE$/i, "")
+    .trim();
+  const tidy = storeCase(name || raw);
+  return area ? `${tidy} · ${storeCase(area)}` : tidy;
+}
+
+// "FNU MOHAMMED IBRAHIM" -> "Fnu Mohammed Ibrahim"
+function nameCase(name: string): string {
+  if (name !== name.toUpperCase()) return name;
+  return name.toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (_, sep, c) => sep + c.toUpperCase());
+}
+
+// Who money came from, with the memo if the sender wrote one:
+// "Zelle from Qader Mohammed (Golf)".
+function moneyFrom(name: string, text: string): string {
+  const via = /zelle/i.test(text) ? "Zelle from" : "From";
+  const memo = text.match(/\nmemo:? ([^\n]{1,60})/i)?.[1].trim();
+  return `${via} ${nameCase(name)}${memo ? ` (${memo})` : ""}`;
+}
+
+function last4(text: string): string | null {
+  return (
+    text.match(/(?:ending(?: in)?|last (?:4|four)(?: digits)?(?: of)?|card|account)[^\d\n]{0,25}?\n?(\d{4})\b/i)?.[1] ??
+    text.match(/(?:\.{2,}|\*{2,}|x{2,})\s?(\d{4})\b/i)?.[1] ??
+    null
+  );
+}
+
+// The patterns banks use, most specific first. Each returns the amount and
+// (when the email names one) the other party.
+const PATTERNS: { kind: AlertKind; re: RegExp; amount: number; who?: number }[] = [
+  // Zelle money in ("QADER MOHAMMED sent you money … Amount $20.00"); first,
+  // because the email also says "payment".
+  { kind: "income", re: new RegExp(`([^\\n]{2,60}?) sent you money[\\s\\S]{0,80}?amount:?\\s*${MONEY}`, "i"), amount: 2, who: 1 },
+
+  // Paying off a card ("We received your $250.00 payment", "Payment of $250 posted",
+  // Amex: "We received your payment. … Payment amount: $518.24")
+  { kind: "card_payment", re: new RegExp(`received (?:your|a) payment[\\s\\S]{0,400}?payment amount:?\\s*${MONEY}`, "i"), amount: 1 },
+  { kind: "card_payment", re: new RegExp(`(?:received|posted|processed|applied)[^.\\n]{0,40}?payment of ${MONEY}`, "i"), amount: 1 },
+  { kind: "card_payment", re: new RegExp(`(?:received|posted|processed)[^.\\n]{0,20}?${MONEY}[^.\\n]{0,10}?payment`, "i"), amount: 1 },
+  { kind: "card_payment", re: new RegExp(`payment of ${MONEY}[^.\\n]{0,40}?(?:has been |was )?(?:received|posted|processed|applied|credited)`, "i"), amount: 1 },
+  { kind: "card_payment", re: new RegExp(`(?:your )?${MONEY} payment (?:has been |was )?(?:received|posted|processed|applied)`, "i"), amount: 1 },
+  { kind: "card_payment", re: new RegExp(`thank you for (?:your|the) (?:${MONEY} )?payment`, "i"), amount: 1 },
+
+  // Zelle / transfers out ("You sent $40.00 to Alex")
+  { kind: "transfer", re: new RegExp(`you sent ${MONEY} to ([^\\n]+)`, "i"), amount: 1, who: 2 },
+  { kind: "transfer", re: new RegExp(`(?:zelle|transfer|payment) of ${MONEY} (?:was )?sent to ([^\\n]+)`, "i"), amount: 1, who: 2 },
+  { kind: "transfer", re: new RegExp(`${MONEY} (?:was )?sent to ([^\\n]+)`, "i"), amount: 1, who: 2 },
+
+  // Money in ("deposited the $1500.00 payment from NAME", "You received $40 from")
+  { kind: "income", re: new RegExp(`(?:deposited|received)(?: the)? ${MONEY}(?: payment)? from ([^\\n]+)`, "i"), amount: 1, who: 2 },
+  { kind: "income", re: new RegExp(`(?:direct )?deposit of ${MONEY}(?: from ([^\\n]+))?`, "i"), amount: 1, who: 2 },
+
+  // Refunds and credits
+  { kind: "refund", re: new RegExp(`(?:refund|credit|return) of ${MONEY}(?: (?:from|at|by) ([^\\n]+))?`, "i"), amount: 1, who: 2 },
+  { kind: "refund", re: new RegExp(`${MONEY} (?:refund|credit) (?:from|at|by) ([^\\n]+)`, "i"), amount: 1, who: 2 },
+
+  // Purchases
+  { kind: "purchase", re: new RegExp(`(?:a |an |your )?${MONEY} (?:transaction|purchase|charge|debit card transaction|card transaction)(?: was)?(?: made| approved| authorized)?(?: at| with| to| from)? ([^\\n]+)`, "i"), amount: 1, who: 2 },
+  { kind: "purchase", re: new RegExp(`(?:transaction|purchase|charge|charged|spent)(?: of)? ${MONEY}(?: was made| was approved)? (?:at|with|to|from|on) ([^\\n]+)`, "i"), amount: 1, who: 2 },
+  // "Large Purchase Approved: $89.00 at SWEETGREEN"
+  { kind: "purchase", re: new RegExp(`(?:transaction|purchase|charge) (?:approved|authorized|made):? ${MONEY} (?:at|with) ([^\\n]+)`, "i"), amount: 1, who: 2 },
+  { kind: "purchase", re: new RegExp(`you made a ${MONEY} (?:transaction|purchase|payment) (?:with|at|to) ([^\\n]+)`, "i"), amount: 1, who: 2 },
+  // "at STAR MARKET 123, a pending authorization or purchase in the amount of $54.12"
+  { kind: "purchase", re: new RegExp(`\\bat ([^,\\n]{2,60}),? (?:a |an )?(?:pending authorization or purchase|purchase|charge|transaction|authorization) in the amount of ${MONEY}`, "i"), amount: 2, who: 1 },
+  { kind: "purchase", re: new RegExp(`(?:purchase|charge|transaction|authorization) in the amount of ${MONEY}(?: (?:at|with) ([^\\n]+))?`, "i"), amount: 1, who: 2 },
+  { kind: "purchase", re: new RegExp(`(?:merchant|description|where)\\s*:?\\s*([^\\n$]{2,60})\\n?[^$]{0,80}?(?:amount|total)\\s*:?\\s*${MONEY}`, "i"), amount: 2, who: 1 },
+  { kind: "purchase", re: new RegExp(`(?:amount|total)\\s*:?\\s*${MONEY}[^$]{0,80}?(?:merchant|description|where)\\s*:?\\s*([^\\n$]{2,60})`, "i"), amount: 1, who: 2 },
+];
+
+const LOOKS_LIKE_TRANSACTION = /\b(transaction|purchase|charge[ds]?|spent|approved|authori[sz]ed|debit|sent|zelle|deposit(ed)?|refund|payment (received|posted))\b/i;
+
+export function parseAlert(email: { sender: string; subject: string; body: string }): ParsedAlert {
+  // A phone screenshot has no sender address; the screen names the bank.
+  const bank = bankOf(email.sender) ?? (email.sender === SCREENSHOT_SENDER ? screenshotBank(email.body) : null);
+  // Subject first: it's usually the clearest line.
+  const text = `${email.subject}\n${email.body}`
+    .replace(/ /g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n\s*\n+/g, "\n");
+  const card = last4(text);
+
+  for (const p of PATTERNS) {
+    // Every occurrence, not just the first: the subject often repeats the
+    // body's words without the amount ("Thank you for your payment").
+    for (const m of text.matchAll(new RegExp(p.re.source, `${p.re.flags}g`))) {
+      const amount = money(m[p.amount]);
+      if (amount === null) continue;
+      let merchant = p.who ? cleanMerchant(m[p.who]) : null;
+      // Citi's sentence names the card, but its table has "Merchant  DUNKIN #356492 ROXBURY US"
+      // (sometimes wrapped onto a second line).
+      if (!merchant && p.kind === "purchase") {
+        const field = text.match(/\nmerchant:?\s*\n?([^\n$]{2,60})(?:\n([^\n$]{2,40}))?/i);
+        // The wrapped part is in capitals like the name; "Date" or "Time" is the next label.
+        const wrapped = field?.[2] && /[A-Z]/.test(field[2]) && field[2] === field[2].toUpperCase() ? field[2] : "";
+        merchant = cleanMerchant(field ? `${field[1]} ${wrapped}` : undefined);
+      }
+      if (merchant && (p.kind === "purchase" || p.kind === "refund")) merchant = tidyMerchant(merchant);
+      if (p.kind === "income" && merchant) merchant = moneyFrom(merchant, text);
+      return { kind: p.kind, amount, merchant, bank, cardLast4: card };
+    }
+  }
+
+  // No known pattern. Promotions and notices are skipped; something that has
+  // an amount and transaction words is shown as "couldn't read".
+  const amount = money(text.match(new RegExp(MONEY))?.[1]);
+  if (amount !== null && LOOKS_LIKE_TRANSACTION.test(text) && !NOT_A_TRANSACTION.test(email.subject)) {
+    return { kind: "unreadable", amount, merchant: null, bank, cardLast4: card };
+  }
+  return { kind: "ignore", amount: null, merchant: null, bank, cardLast4: card };
+}
+
+// ---------------------------------------------------------------------------
+// Categories and payment methods, matching the expense form
+// ---------------------------------------------------------------------------
+
+export const CATEGORIES = ["Food", "Transport", "Shopping", "Bills", "Other"] as const;
+export type Category = (typeof CATEGORIES)[number];
+
+export function merchantKey(merchant: string): string {
+  // The brand, not the branch: every Dunkin learns the same category.
+  return merchant
+    .split(" · ")[0]
+    .toLowerCase()
+    .replace(/\b(store|#|no\.?)\s*\d+\b/g, " ")
+    .replace(/\d{3,}/g, " ")
+    .replace(/[^a-z& ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const CATEGORY_WORDS: [Category, RegExp][] = [
+  ["Food", /uber\W*eats|doordash|grubhub|instacart|starbucks|dunkin|coffee|caf[eé]|restaurant|kitchen|grill|pizza|burger|taco|sushi|ramen|thai|bakery|chipotle|mcdonald|subway|wendy|chick-?fil|panera|sweetgreen|shake shack|trader joe|whole foods|star market|stop ?& ?shop|wegmans|h ?mart|market basket|aldi|grocery|food|deli|\bmarket\b|bar\b|pub\b/],
+  ["Transport", /\buber\b|lyft|mbta|charlie|transit|amtrak|parking|park(ing)? meter|\bgas\b|shell|exxon|mobil|chevron|sunoco|citgo|bp\b|airline|delta|jetblue|united|american air|southwest|spirit|frontier|toll|ez ?pass|zipcar|bluebikes/],
+  ["Bills", /verizon|t-?mobile|at&t|total wireless|mint mobile|comcast|xfinity|eversource|national grid|electric|utility|water|insurance|geico|progressive|state farm|netflix|spotify|hulu|disney|youtube|apple\.com|icloud|google|adobe|chatgpt|openai|anthropic|claude|subscription|rent|landlord|gym|planet fitness/],
+  ["Shopping", /amazon|amzn|target|walmart|costco|best buy|apple store|ikea|marshalls|tj ?maxx|home ?goods|nike|uniqlo|zara|h&m|macy|nordstrom|cvs|walgreens|ebay|etsy|shein|temu/],
+];
+
+export function guessCategory(merchant: string | null, kind: AlertKind): Category {
+  if (kind === "transfer") return "Other";
+  const m = merchant?.toLowerCase() ?? "";
+  return CATEGORY_WORDS.find(([, re]) => re.test(m))?.[0] ?? "Other";
+}
+
+// The expense form's payment methods.
+export type PaymentMethod = "Discover" | "Amex" | "Citi" | "Cash" | "Debit";
+
+export function paymentMethodFor(bank: Bank | null): PaymentMethod {
+  switch (bank) {
+    case "citi":
+      return "Citi";
+    case "amex":
+      return "Amex";
+    case "discover":
+    case "capitalone": // Discover is part of Capital One
+      return "Discover";
+    default:
+      return "Debit";
+  }
+}
+
+// Which card or account an alert belongs to, as a key that can be
+// remembered: "citi 1234", or just "amex" when the email has no digits.
+export function accountKey(bank: Bank | null, cardLast4: string | null): string | null {
+  if (!bank) return null;
+  return cardLast4 ? `${bank} ${cardLast4}` : bank;
+}
+
+export function isCardBank(bank: Bank | null): boolean {
+  return bank === "citi" || bank === "amex" || bank === "discover" || bank === "capitalone";
+}
