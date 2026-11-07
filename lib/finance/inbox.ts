@@ -27,16 +27,34 @@ const BANK_WORDS: Record<Bank, RegExp> = {
 // Reads alert emails that arrived since the last visit (or that an older
 // version of the reader read), and fills in what they say: kind, amount,
 // merchant, a category, and the card or account they're probably about.
+//
+// Order matters for screenshots: emails and notification screenshots are read
+// first, so that when a transaction-list screenshot is split, the purchases
+// the inbox already has (with their amounts) are there to be skipped. The
+// purchases split out of it are then read in a second pass.
 export async function readNewAlerts(supabase: SupabaseClient): Promise<void> {
-  await splitScreenshots(supabase);
+  await readWaiting(supabase);
+  const added = await splitScreenshots(supabase);
+  // By id: the same query twice in one page load gets the first answer back
+  // (Next reuses identical requests), which wouldn't include these.
+  if (added.length) await readWaiting(supabase, added);
+}
 
-  const { data: alerts } = await supabase
+async function readWaiting(supabase: SupabaseClient, ids?: string[]): Promise<void> {
+  let query = supabase
     .from("bank_alerts")
-    .select("id, sender, subject, body, merchant, category, credit_card_id, bank_account_id")
+    .select("id, sender, subject, body, email_date, merchant, category, credit_card_id, bank_account_id")
     .eq("status", "new")
-    .or(`parser_version.is.null,parser_version.lt.${PARSER_VERSION}`)
-    .limit(200);
-  if (!alerts?.length) return;
+    .or(`parser_version.is.null,parser_version.lt.${PARSER_VERSION}`);
+  if (ids) query = query.in("id", ids);
+  const { data: waiting } = await query.limit(200);
+  // Transaction-list screenshots are split into purchases, not read whole.
+  const alerts = (waiting ?? []).filter(
+    (a) =>
+      !(a.sender === SCREENSHOT_SENDER && a.subject === SCREENSHOT_SUBJECT &&
+        readTransactionList(a.body, new Date(a.email_date)).length)
+  );
+  if (!alerts.length) return;
 
   const [{ data: cards }, { data: accounts }, { data: learnedCategories }, { data: learnedAccounts }] =
     await Promise.all([
@@ -117,7 +135,9 @@ const BANK_NAMES: Record<Bank, string> = {
 // a day of the purchase, from any source (a notification screenshot, an
 // email, an earlier screenshot of the same list). Counting, not just
 // matching: two $5.25 coffees on one day stay two.
-async function splitScreenshots(supabase: SupabaseClient): Promise<void> {
+// Returns the ids of the purchases added.
+async function splitScreenshots(supabase: SupabaseClient): Promise<string[]> {
+  const added: string[] = [];
   const { data: shots } = await supabase
     .from("bank_alerts")
     .select("id, user_id, message_id, body, email_date")
@@ -125,6 +145,7 @@ async function splitScreenshots(supabase: SupabaseClient): Promise<void> {
     .eq("sender", SCREENSHOT_SENDER)
     .eq("subject", SCREENSHOT_SUBJECT)
     .is("parser_version", null)
+    .order("email_date", { ascending: true })
     .limit(50);
 
   for (const shot of shots ?? []) {
@@ -176,18 +197,26 @@ async function splitScreenshots(supabase: SupabaseClient): Promise<void> {
         subject: `From a screenshot of the ${BANK_NAMES[bank]} app`,
         body: `${BANK_NAMES[bank]}\n${body}`,
         email_date: noon(item.date).toISOString(),
+        // Known now, so the next screenshot split before these are read can skip them.
+        bank,
+        amount,
       });
     }
 
     if (rows.length) {
-      const { error } = await supabase.from("bank_alerts").upsert(rows, { onConflict: "user_id,message_id", ignoreDuplicates: true });
+      const { data: inserted, error } = await supabase
+        .from("bank_alerts")
+        .upsert(rows, { onConflict: "user_id,message_id", ignoreDuplicates: true })
+        .select("id");
       if (error) continue; // try again next time
+      added.push(...(inserted ?? []).map((r) => r.id));
     }
     await supabase
       .from("bank_alerts")
       .update({ status: "dismissed", kind: "ignore", bank, parser_version: PARSER_VERSION, reviewed_at: new Date().toISOString() })
       .eq("id", shot.id);
   }
+  return added;
 }
 
 // How many alerts are waiting for review (for the badge on the dashboard).

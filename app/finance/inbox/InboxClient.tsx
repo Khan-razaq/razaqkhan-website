@@ -353,6 +353,9 @@ function GmailSetup({
   const [copied, setCopied] = useState(false);
   // Asked on the page, not with a browser popup: some browsers block those.
   const [confirming, setConfirming] = useState(false);
+  // Open until set up, and kept open once a key is made: the page refreshes
+  // then, and the new key must stay in view.
+  const [open, setOpen] = useState(!gmailKey);
 
   const handleCreate = async () => {
     setConfirming(false);
@@ -380,7 +383,8 @@ function GmailSetup({
 
   return (
     <details
-      open={!gmailKey}
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
       className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 text-sm text-gray-700 dark:text-gray-300"
     >
       <summary className="cursor-pointer font-medium text-gray-900 dark:text-gray-100">
@@ -477,6 +481,9 @@ function PhoneSetup({ phoneKey }: { phoneKey: KeyInfo | null }) {
   const [copied, setCopied] = useState("");
   // Asked on the page, not with a browser popup: some browsers block those.
   const [confirming, setConfirming] = useState(false);
+  // Open until set up, and kept open once a key is made: the page refreshes
+  // then, and the new key must stay in view.
+  const [open, setOpen] = useState(!phoneKey);
 
   const handleCreate = async () => {
     setConfirming(false);
@@ -503,7 +510,8 @@ function PhoneSetup({ phoneKey }: { phoneKey: KeyInfo | null }) {
 
   return (
     <details
-      open={!phoneKey}
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
       className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 text-sm text-gray-700 dark:text-gray-300"
     >
       <summary className="cursor-pointer font-medium text-gray-900 dark:text-gray-100">
