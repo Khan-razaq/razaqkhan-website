@@ -12,7 +12,7 @@
 
 import { SCREENSHOT_SENDER, screenshotBank } from "./screenshot";
 
-export const PARSER_VERSION = 7;
+export const PARSER_VERSION = 8;
 
 export type AlertKind = "purchase" | "refund" | "transfer" | "card_payment" | "income" | "ignore" | "unreadable";
 
@@ -87,6 +87,8 @@ function storeCase(s: string): string {
 }
 
 export function tidyMerchant(raw: string): string {
+  // Amex's "CR ADJ FOR FINANCE CHARGE": an interest charge given back.
+  if (/^CR ADJ\b/i.test(raw)) return "Credit adjustment";
   const words = raw
     .replace(PROCESSOR_PREFIX, "")
     .replace(/\s*\*\s*/g, " ")
@@ -247,7 +249,7 @@ export function merchantKey(merchant: string): string {
 const CATEGORY_WORDS: [Category, RegExp][] = [
   ["Food", /uber\W*eats|doordash|grubhub|instacart|starbucks|dunkin|coffee|caf[eé]|restaurant|kitchen|grill|pizza|burger|taco|sushi|ramen|thai|bakery|chipotle|mcdonald|subway|wendy|chick-?fil|panera|sweetgreen|shake shack|trader joe|whole foods|star market|stop ?& ?shop|wegmans|h ?mart|market basket|aldi|grocery|food|deli|\bmarket\b|bar\b|pub\b/],
   ["Transport", /\buber\b|lyft|mbta|charlie|transit|amtrak|parking|park(ing)? meter|\bgas\b|shell|exxon|mobil|chevron|sunoco|citgo|bp\b|airline|delta|jetblue|united|american air|southwest|spirit|frontier|toll|ez ?pass|zipcar|bluebikes/],
-  ["Bills", /verizon|t-?mobile|at&t|total wireless|mint mobile|comcast|xfinity|eversource|national grid|electric|utility|water|insurance|geico|progressive|state farm|netflix|spotify|hulu|disney|youtube|apple\.com|icloud|google|adobe|chatgpt|openai|anthropic|claude|subscription|rent|landlord|gym|planet fitness/],
+  ["Bills", /verizon|t-?mobile|at&t|total wireless|mint mobile|comcast|xfinity|eversource|national grid|electric|utility|water|insurance|geico|progressive|state farm|netflix|spotify|hulu|disney|youtube|apple\.com|icloud|google|adobe|chatgpt|openai|anthropic|claude|subscription|rent|landlord|gym|planet fitness|interest charge|finance charge|late fee|annual fee/],
   ["Shopping", /amazon|amzn|target|walmart|costco|best buy|apple store|ikea|marshalls|tj ?maxx|home ?goods|nike|uniqlo|zara|h&m|macy|nordstrom|cvs|walgreens|ebay|etsy|shein|temu/],
 ];
 

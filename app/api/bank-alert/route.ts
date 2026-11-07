@@ -9,7 +9,7 @@
 import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { parseAlert } from "@/lib/finance/alerts";
-import { SCREENSHOT_SENDER, SCREENSHOT_SUBJECT, readTransactionList } from "@/lib/finance/screenshot";
+import { SCREENSHOT_SENDER, SCREENSHOT_SUBJECT, readTransactionList, undatedAtTop } from "@/lib/finance/screenshot";
 
 const reply = (text: string, status = 200) =>
   new Response(text, { status, headers: { "Content-Type": "text/plain; charset=utf-8" } });
@@ -49,7 +49,13 @@ export async function POST(request: Request) {
   const items = readTransactionList(text, now);
   // (Ones the Inbox already has are skipped when it's opened, so "new ones".)
   if (items.length) {
-    return reply(`Found ${items.length} ${items.length === 1 ? "transaction" : "transactions"}. New ones are in your Inbox.`);
+    const undated = undatedAtTop(text, now);
+    const found = `Found ${items.length} ${items.length === 1 ? "transaction" : "transactions"}. New ones are in your Inbox.`;
+    return reply(
+      undated
+        ? `${found} ${undated} at the top had no date above them: scroll up a little so a date shows, and tap again.`
+        : found
+    );
   }
   const { kind, amount } = parseAlert({ sender: SCREENSHOT_SENDER, subject: SCREENSHOT_SUBJECT, body: text });
   if (kind === "ignore") return reply("Sent, but I couldn't see a transaction on this screen.");
