@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { readNewAlerts } from "@/lib/finance/inbox";
+import { friendBalances } from "@/lib/finance/friends";
 import InboxClient from "./InboxClient";
 
 export const metadata: Metadata = {
@@ -35,7 +36,7 @@ export default async function InboxPage() {
   // Read any alert emails the Gmail script dropped off since last time.
   await readNewAlerts(supabase);
 
-  const [alertsResult, cardsResult, accountsResult, keysResult, spentByResult] = await Promise.all([
+  const [alertsResult, cardsResult, accountsResult, keysResult, spentByResult, paidBackResult] = await Promise.all([
     supabase
       .from("bank_alerts")
       .select("id, sender, subject, email_date, kind, amount, merchant, bank, card_last4, category, credit_card_id, bank_account_id")
@@ -45,14 +46,22 @@ export default async function InboxPage() {
     supabase.from("credit_cards").select("id, name, issuer").order("display_order", { ascending: true }),
     supabase.from("bank_accounts").select("id, name").order("display_order", { ascending: true }),
     supabase.from("bank_alert_keys").select("label, created_at, last_used_at"),
+    // Friends' purchases on the card, and what they've paid back.
     supabase
       .from("expenses")
-      .select("spent_by")
+      .select("id, description, amount, expense_date, spent_by")
       .not("spent_by", "is", null)
       .order("expense_date", { ascending: false })
       .limit(1000),
+    supabase
+      .from("incomes")
+      .select("id, source, amount, income_date, paid_back_by")
+      .not("paid_back_by", "is", null)
+      .order("income_date", { ascending: false })
+      .limit(1000),
   ]);
   const keys = keysResult.data || [];
+  const friendSpending = spentByResult.data || [];
 
   return (
     <InboxClient
@@ -61,7 +70,8 @@ export default async function InboxPage() {
       bankAccounts={accountsResult.data || []}
       gmailKey={keys.find((k) => k.label === "gmail") ?? null}
       phoneKey={keys.find((k) => k.label === "phone") ?? null}
-      people={peopleByUse((spentByResult.data || []).map((r) => r.spent_by as string))}
+      people={peopleByUse(friendSpending.map((r) => r.spent_by as string))}
+      friends={friendBalances(friendSpending, paidBackResult.data || [])}
       supabaseUrl={process.env.NEXT_PUBLIC_SUPABASE_URL!}
       publicKey={process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!}
     />

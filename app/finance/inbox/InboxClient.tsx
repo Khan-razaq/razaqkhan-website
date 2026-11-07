@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CATEGORIES } from "@/lib/finance/alerts";
 import { gmailScript } from "@/lib/finance/gmailScript";
+import { likelyFriend, type Friend } from "@/lib/finance/friends";
 import { confirmAlert, createGmailKey, dismissAlert } from "./actions";
 
 type Alert = {
@@ -70,11 +71,13 @@ export default function InboxClient({
   gmailKey,
   phoneKey,
   people,
+  friends,
   supabaseUrl,
   publicKey,
 }: {
   alerts: Alert[];
   people: string[];
+  friends: Friend[];
   creditCards: Card[];
   bankAccounts: Account[];
   gmailKey: KeyInfo | null;
@@ -140,6 +143,8 @@ export default function InboxClient({
           </section>
         )}
 
+        <FriendsPanel friends={friends} />
+
         <GmailSetup gmailKey={gmailKey} supabaseUrl={supabaseUrl} publicKey={publicKey} />
         <PhoneSetup phoneKey={phoneKey} />
       </div>
@@ -185,6 +190,9 @@ function AlertCard({
   const [fromAccount, setFromAccount] = useState(alert.bank_account_id ?? "");
   // Who spent it: empty is the user. Typing a name opens a box.
   const [spentBy, setSpentBy] = useState("");
+  // Money in: the friend paying back, picked for the user when the sender's
+  // name has exactly one friend's name in it.
+  const [paidBackBy, setPaidBackBy] = useState(() => (isIncome ? likelyFriend(alert.merchant ?? "", people) ?? "" : ""));
   const [typingName, setTypingName] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -204,6 +212,7 @@ function AlertCard({
       creditCardId: isCardPayment ? paidCard || null : paidWith.startsWith("card:") ? paidWith.slice(5) : null,
       bankAccountId: isCardPayment || isIncome ? fromAccount || null : paidWith.startsWith("account:") ? paidWith.slice(8) : null,
       spentBy: asksWho ? spentBy.trim() || null : null,
+      paidBackBy: isIncome ? paidBackBy || null : null,
     });
     setBusy(false);
     if (result.error) setError(result.error);
@@ -359,6 +368,25 @@ function AlertCard({
                   ))}
                 </optgroup>
               </select>
+            </div>
+          )}
+
+          {isIncome && people.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">Paying you back?</span>
+              <button type="button" onClick={() => setPaidBackBy("")} className={!paidBackBy ? chipOn : chipOff}>
+                No
+              </button>
+              {people.slice(0, 8).map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => setPaidBackBy(name)}
+                  className={paidBackBy === name ? chipOn : chipOff}
+                >
+                  {name}
+                </button>
+              ))}
             </div>
           )}
 
@@ -554,6 +582,76 @@ function GmailSetup({
         )}
       </div>
     </details>
+  );
+}
+
+// What each friend owes: what they spent on the card minus what they've paid
+// back. Tap a friend to see each purchase and payback.
+function FriendsPanel({ friends }: { friends: Friend[] }) {
+  const [openName, setOpenName] = useState<string | null>(null);
+  if (friends.length === 0) return null;
+  const totalOwed = friends.reduce((sum, f) => sum + Math.max(f.owes, 0), 0);
+
+  return (
+    <section className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 mb-6">
+      <div className="flex items-baseline justify-between mb-2">
+        <h2 className="text-sm font-medium text-gray-900 dark:text-gray-100">Friends owe you</h2>
+        <span className="text-sm font-semibold text-teal-600 dark:text-teal-400">${totalOwed.toFixed(2)}</span>
+      </div>
+      <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+        {friends.map((friend) => {
+          const isOpen = openName === friend.name;
+          return (
+            <li key={friend.name}>
+              <button
+                type="button"
+                onClick={() => setOpenName(isOpen ? null : friend.name)}
+                className="w-full flex items-center justify-between py-2 text-left cursor-pointer"
+                aria-expanded={isOpen}
+              >
+                <span className="text-sm text-gray-900 dark:text-gray-100">
+                  {isOpen ? "▾" : "▸"} {friend.name}
+                </span>
+                <span
+                  className={`text-sm font-medium ${
+                    friend.owes > 0 ? "text-teal-600 dark:text-teal-400" : "text-gray-500 dark:text-gray-400"
+                  }`}
+                >
+                  {friend.owes > 0
+                    ? `owes $${friend.owes.toFixed(2)}`
+                    : friend.owes < 0
+                      ? `paid $${(-friend.owes).toFixed(2)} extra`
+                      : "settled"}
+                </span>
+              </button>
+              {isOpen && (
+                <div className="pb-3 pl-4">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                    Spent ${friend.spent.toFixed(2)} · paid back ${friend.paidBack.toFixed(2)}
+                  </p>
+                  <ul className="space-y-1">
+                    {friend.entries.map((entry) => (
+                      <li key={`${entry.kind}-${entry.id}`} className="flex items-center justify-between gap-3 text-xs">
+                        <span className="min-w-0 truncate text-gray-700 dark:text-gray-300">
+                          <span className="text-gray-400 dark:text-gray-500">{entry.date}</span> {entry.description}
+                        </span>
+                        <span
+                          className={`shrink-0 ${
+                            entry.kind === "paid_back" ? "text-green-600 dark:text-green-400" : "text-gray-900 dark:text-gray-100"
+                          }`}
+                        >
+                          {entry.kind === "paid_back" ? "paid back " : ""}${entry.amount.toFixed(2)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 

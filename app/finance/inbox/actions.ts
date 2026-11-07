@@ -16,6 +16,8 @@ type Confirm = {
   bankAccountId: string | null;
   // Who spent it, when a friend used the card; empty is the user.
   spentBy?: string | null;
+  // For money in: the friend paying back, if it's that.
+  paidBackBy?: string | null;
 };
 
 async function signedIn() {
@@ -76,9 +78,17 @@ export async function confirmAlert(input: Confirm): Promise<{ error: string | nu
     // account it arrived in.
     if (!input.bankAccountId) return { error: "Pick the account the money went into." };
     const source = input.description.trim() || "Money in";
+    const paidBackBy = (input.paidBackBy ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
     const { data: income, error } = await supabase
       .from("incomes")
-      .insert({ user_id: user.id, amount, source, income_date: input.date })
+      .insert({
+        user_id: user.id,
+        amount,
+        source,
+        income_date: input.date,
+        // A friend paying back what they spent on the card.
+        ...(paidBackBy ? { paid_back_by: paidBackBy } : {}),
+      })
       .select("id")
       .single();
     if (error || !income) return { error: error?.message ?? "Couldn't save the income." };
