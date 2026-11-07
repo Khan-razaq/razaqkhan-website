@@ -33,6 +33,11 @@ const primaryButton =
 const secondaryButton =
   "px-3 py-1.5 rounded-md text-sm border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
 
+const chipOn =
+  "px-2.5 py-1 rounded-full text-xs font-medium bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 cursor-pointer";
+const chipOff =
+  "px-2.5 py-1 rounded-full text-xs border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800";
+
 const BANK_NAMES: Record<string, string> = {
   citi: "Citi",
   amex: "Amex",
@@ -45,6 +50,7 @@ const BANK_NAMES: Record<string, string> = {
 const KIND_LABELS: Record<string, { label: string; className: string }> = {
   purchase: { label: "Purchase", className: "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300" },
   transfer: { label: "Sent", className: "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300" },
+  own_transfer: { label: "Between your accounts", className: "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300" },
   card_payment: { label: "Card payment", className: "bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300" },
   income: { label: "Money in", className: "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300" },
   refund: { label: "Refund", className: "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300" },
@@ -63,10 +69,12 @@ export default function InboxClient({
   bankAccounts,
   gmailKey,
   phoneKey,
+  people,
   supabaseUrl,
   publicKey,
 }: {
   alerts: Alert[];
+  people: string[];
   creditCards: Card[];
   bankAccounts: Account[];
   gmailKey: KeyInfo | null;
@@ -103,10 +111,15 @@ export default function InboxClient({
         ) : (
           <div className="space-y-2 mb-6">
             {waiting.map((alert) => (
-              <AlertCard key={alert.id} alert={alert} creditCards={creditCards} bankAccounts={bankAccounts} />
+              <AlertCard key={alert.id} alert={alert} creditCards={creditCards} bankAccounts={bankAccounts} people={people} />
             ))}
           </div>
         )}
+        <datalist id="people-names">
+          {people.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
 
         {skipped.length > 0 && (
           <section className="mb-6">
@@ -120,7 +133,7 @@ export default function InboxClient({
             {showSkipped && (
               <div className="space-y-2 mt-2">
                 {skipped.map((alert) => (
-                  <AlertCard key={alert.id} alert={alert} creditCards={creditCards} bankAccounts={bankAccounts} />
+                  <AlertCard key={alert.id} alert={alert} creditCards={creditCards} bankAccounts={bankAccounts} people={people} />
                 ))}
               </div>
             )}
@@ -134,13 +147,29 @@ export default function InboxClient({
   );
 }
 
-function AlertCard({ alert, creditCards, bankAccounts }: { alert: Alert; creditCards: Card[]; bankAccounts: Account[] }) {
+function AlertCard({
+  alert,
+  creditCards,
+  bankAccounts,
+  people,
+}: {
+  alert: Alert;
+  creditCards: Card[];
+  bankAccounts: Account[];
+  people: string[];
+}) {
   const router = useRouter();
   const kind = alert.kind ?? "unreadable";
   const isSkipped = kind === "ignore";
   const isIncome = kind === "income";
   const isRefund = kind === "refund";
+  const isOwnTransfer = kind === "own_transfer";
   const isCardPayment = kind === "card_payment";
+  // Nothing to add for these: a note and Dismiss.
+  const isNoteOnly = isRefund || isOwnTransfer;
+  // Friends use the card too: purchases ask who spent it. (Zelle sent from
+  // the user's own account is theirs.)
+  const asksWho = !isCardPayment && !isIncome && kind !== "transfer";
 
   // Skipped emails start folded: one tap opens the form if one was real.
   const [open, setOpen] = useState(!isSkipped);
@@ -154,6 +183,9 @@ function AlertCard({ alert, creditCards, bankAccounts }: { alert: Alert; creditC
   );
   const [paidCard, setPaidCard] = useState(alert.credit_card_id ?? "");
   const [fromAccount, setFromAccount] = useState(alert.bank_account_id ?? "");
+  // Who spent it: empty is the user. Typing a name opens a box.
+  const [spentBy, setSpentBy] = useState("");
+  const [typingName, setTypingName] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -171,6 +203,7 @@ function AlertCard({ alert, creditCards, bankAccounts }: { alert: Alert; creditC
       category,
       creditCardId: isCardPayment ? paidCard || null : paidWith.startsWith("card:") ? paidWith.slice(5) : null,
       bankAccountId: isCardPayment || isIncome ? fromAccount || null : paidWith.startsWith("account:") ? paidWith.slice(8) : null,
+      spentBy: asksWho ? spentBy.trim() || null : null,
     });
     setBusy(false);
     if (result.error) setError(result.error);
@@ -213,22 +246,29 @@ function AlertCard({ alert, creditCards, bankAccounts }: { alert: Alert; creditC
         </button>
       )}
 
-      {open && isRefund && (
+      {open && isNoteOnly && (
         <div className="mt-3 flex items-center justify-between gap-3">
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            A refund isn&apos;t an expense. Dismiss it, or delete the original purchase on the{" "}
-            <Link href="/finance" className="text-blue-600 dark:text-blue-400 hover:underline">
-              dashboard
-            </Link>
-            .
-          </p>
+          {isOwnTransfer ? (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Money moved between your own accounts, so it isn&apos;t spending and there&apos;s nothing to add.
+              Dismiss it.
+            </p>
+          ) : (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              A refund isn&apos;t an expense. Dismiss it, or delete the original purchase on the{" "}
+              <Link href="/finance" className="text-blue-600 dark:text-blue-400 hover:underline">
+                dashboard
+              </Link>
+              .
+            </p>
+          )}
           <button onClick={handleDismiss} disabled={busy} className={secondaryButton}>
             Dismiss
           </button>
         </div>
       )}
 
-      {open && !isRefund && (
+      {open && !isNoteOnly && (
         <div className="mt-3 space-y-2">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <input
@@ -319,6 +359,52 @@ function AlertCard({ alert, creditCards, bankAccounts }: { alert: Alert; creditC
                   ))}
                 </optgroup>
               </select>
+            </div>
+          )}
+
+          {asksWho && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">Who spent it?</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSpentBy("");
+                  setTypingName(false);
+                }}
+                className={!spentBy && !typingName ? chipOn : chipOff}
+              >
+                Me
+              </button>
+              {/* The names used most, so a friend is one tap. */}
+              {people.slice(0, 5).map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => {
+                    setSpentBy(name);
+                    setTypingName(false);
+                  }}
+                  className={!typingName && spentBy === name ? chipOn : chipOff}
+                >
+                  {name}
+                </button>
+              ))}
+              {typingName ? (
+                <input
+                  autoFocus
+                  value={spentBy}
+                  onChange={(e) => setSpentBy(e.target.value)}
+                  placeholder="Their name"
+                  aria-label="Who spent it"
+                  list="people-names"
+                  maxLength={60}
+                  className={`${inputClass} w-40`}
+                />
+              ) : (
+                <button type="button" onClick={() => setTypingName(true)} className={chipOff}>
+                  Someone else…
+                </button>
+              )}
             </div>
           )}
 

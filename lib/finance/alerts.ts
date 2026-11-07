@@ -12,9 +12,17 @@
 
 import { SCREENSHOT_SENDER, screenshotBank } from "./screenshot";
 
-export const PARSER_VERSION = 8;
+export const PARSER_VERSION = 9;
 
-export type AlertKind = "purchase" | "refund" | "transfer" | "card_payment" | "income" | "ignore" | "unreadable";
+export type AlertKind =
+  | "purchase"
+  | "refund"
+  | "transfer"
+  | "own_transfer" // between the user's own accounts: not spending
+  | "card_payment"
+  | "income"
+  | "ignore"
+  | "unreadable";
 
 export type Bank = "citi" | "amex" | "capitalone" | "discover" | "chase" | "santander";
 
@@ -135,6 +143,18 @@ function moneyFrom(name: string, text: string): string {
   return `${via} ${nameCase(name)}${memo ? ` (${memo})` : ""}`;
 }
 
+// Who money went to: "Zelle to Imran Numan Friend (rent)". Santander adds
+// "Zelle" after the name ("Imran Numan Friend Zelle"); that goes.
+function moneyTo(name: string, text: string): string {
+  const via = /zelle/i.test(text) ? "Zelle to" : "Sent to";
+  const memo = text.match(/\nmemo:? ([^\n]{1,60})/i)?.[1].trim();
+  return `${via} ${nameCase(name.replace(/\s+zelle$/i, ""))}${memo ? ` (${memo})` : ""}`;
+}
+
+// A transfer whose other side is an account, not a person: "SIMPLY RIGHT
+// CHECKIN" (the name is cut short in Chase's alert), "Savings ...1234".
+const ACCOUNT_NAME = /\b(checkin|checking|savings?|account|brokerage)\b/i;
+
 function last4(text: string): string | null {
   return (
     text.match(/(?:ending(?: in)?|last (?:4|four)(?: digits)?(?: of)?|card|account)[^\d\n]{0,25}?\n?(\d{4})\b/i)?.[1] ??
@@ -159,7 +179,13 @@ const PATTERNS: { kind: AlertKind; re: RegExp; amount: number; who?: number }[] 
   { kind: "card_payment", re: new RegExp(`(?:your )?${MONEY} payment (?:has been |was )?(?:received|posted|processed|applied)`, "i"), amount: 1 },
   { kind: "card_payment", re: new RegExp(`thank you for (?:your|the) (?:${MONEY} )?payment`, "i"), amount: 1 },
 
-  // Zelle / transfers out ("You sent $40.00 to Alex")
+  // Between the user's own accounts (Chase: "We completed your transfer to
+  // Simply right checking Santander … Amount $200.00")
+  { kind: "own_transfer", re: new RegExp(`completed your transfer to[\\s\\S]{0,300}?amount:?\\s*${MONEY}`, "i"), amount: 1 },
+
+  // Zelle / transfers out ("You sent $40.00 to Alex"; Santander: "your
+  // payment to Imran Numan Friend has finished processing … Amount $1,200.00")
+  { kind: "transfer", re: new RegExp(`your payment to ([^\\n]{2,60}?) has finished[\\s\\S]{0,300}?amount:?\\s*${MONEY}`, "i"), amount: 2, who: 1 },
   { kind: "transfer", re: new RegExp(`you sent ${MONEY} to ([^\\n]+)`, "i"), amount: 1, who: 2 },
   { kind: "transfer", re: new RegExp(`(?:zelle|transfer|payment) of ${MONEY} (?:was )?sent to ([^\\n]+)`, "i"), amount: 1, who: 2 },
   { kind: "transfer", re: new RegExp(`${MONEY} (?:was )?sent to ([^\\n]+)`, "i"), amount: 1, who: 2 },
@@ -197,6 +223,12 @@ export function parseAlert(email: { sender: string; subject: string; body: strin
     .replace(/\n\s*\n+/g, "\n");
   const card = last4(text);
 
+  // A payment that didn't go through ("We canceled your Zelle payment", "A
+  // transaction was declined") isn't one, whatever amount it mentions.
+  if (/\b(cancell?ed|declined|reversed|could ?n[o']t verify)\b/i.test(email.subject)) {
+    return { kind: "ignore", amount: null, merchant: null, bank, cardLast4: card };
+  }
+
   for (const p of PATTERNS) {
     // Every occurrence, not just the first: the subject often repeats the
     // body's words without the amount ("Thank you for your payment").
@@ -214,6 +246,10 @@ export function parseAlert(email: { sender: string; subject: string; body: strin
       }
       if (merchant && (p.kind === "purchase" || p.kind === "refund")) merchant = tidyMerchant(merchant);
       if (p.kind === "income" && merchant) merchant = moneyFrom(merchant, text);
+      if (p.kind === "transfer" && merchant && ACCOUNT_NAME.test(merchant)) {
+        return { kind: "own_transfer", amount, merchant: null, bank, cardLast4: card };
+      }
+      if (p.kind === "transfer" && merchant) merchant = moneyTo(merchant, text);
       return { kind: p.kind, amount, merchant, bank, cardLast4: card };
     }
   }
