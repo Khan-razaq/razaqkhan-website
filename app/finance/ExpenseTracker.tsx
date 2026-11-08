@@ -188,6 +188,8 @@ export default function ExpenseTracker({
   const [payoffError, setPayoffError] = useState("");
 
   const isCardMethod = !BANK_METHODS.includes(paymentMethod);
+  // Cash is paid from the wallet, not from a bank account.
+  const isCash = paymentMethod === "Cash";
   const matchingCards = isCardMethod
     ? creditCards.filter(
         (c) => c.name.toLowerCase() === METHOD_TO_CARD_NAME[paymentMethod]?.toLowerCase()
@@ -271,7 +273,7 @@ export default function ExpenseTracker({
       setError({ field: "card", message: "Please select a credit card." });
       return;
     }
-    if (!isCardMethod && !bankAccountId) {
+    if (!isCardMethod && !isCash && !bankAccountId) {
       setError({ field: "account", message: "Please select a bank account." });
       return;
     }
@@ -295,7 +297,7 @@ export default function ExpenseTracker({
         category,
         payment_method: paymentMethod,
         expense_date: new Date().toISOString().split("T")[0],
-        bank_account_id: isCardMethod ? null : bankAccountId,
+        bank_account_id: isCardMethod || isCash ? null : bankAccountId,
         credit_card_id: isCardMethod ? autoMatchedCardId || creditCardId : null,
       })
       .select()
@@ -394,7 +396,7 @@ export default function ExpenseTracker({
     if (e.credit_card_id) {
       return creditCards.find((c) => c.id === e.credit_card_id)?.name || "Unknown";
     }
-    return "—";
+    return null;
   };
 
   return (
@@ -700,7 +702,7 @@ export default function ExpenseTracker({
                   <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error.message}</p>
                 )}
               </div>
-            ) : !isCardMethod ? (
+            ) : !isCardMethod && !isCash ? (
               <div>
                 <select
                   value={bankAccountId}
@@ -756,7 +758,8 @@ export default function ExpenseTracker({
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                       {expense.category} · {expense.payment_method} ·{" "}
-                      {expenseSourceLabel(expense)} · {expense.expense_date}
+                      {expenseSourceLabel(expense) && <>{expenseSourceLabel(expense)} · </>}
+                      {expense.expense_date}
                       {expense.spent_by && (
                         <span className="text-teal-600 dark:text-teal-400"> · {expense.spent_by}</span>
                       )}

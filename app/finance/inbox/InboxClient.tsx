@@ -799,8 +799,8 @@ function PhoneSetup({ phoneKey }: { phoneKey: KeyInfo | null }) {
             </li>
           </ol>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            It comes out of the bank account your last cash expense used (Chase Checking if none), and remembers the
-            category you last used for that store. Say it again by mistake within 2 minutes and it&apos;s added once.
+            It&apos;s recorded as cash only, not taken from any bank account, and uses the category you last used for
+            that store. Say it again by mistake within 2 minutes and it&apos;s added once.
           </p>
         </div>
         {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
