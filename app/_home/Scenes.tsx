@@ -47,7 +47,7 @@ const runHero: Start = (c, f) => startHero(c, f.sans, f.mono);
 const runSwarm: Start = (c, f) =>
   startSwarm(c, f.sans, () => document.documentElement.classList.contains("dark"));
 
-// Beside the introduction (large screens) the hero is a squarer 960×720 scene.
+// Beside the introduction (large screens) the hero is a 960×600 scene.
 const SIDE = "(min-width: 1024px)";
 const subscribeSide = (cb: () => void) => {
   const mq = window.matchMedia(SIDE);
@@ -61,7 +61,7 @@ function useSide() {
 export function HeroScene() {
   const small = useSmall();
   const side = useSide();
-  const size = small ? [720, 820] : side ? [960, 720] : [1280, 560];
+  const size = small ? [720, 820] : side ? [960, 600] : [1280, 560];
   const ref = useScene(runHero, small, side);
   return (
     <canvas

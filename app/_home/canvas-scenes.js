@@ -6,7 +6,7 @@ export function startHero(c, FONT, MONO) {
   var alive = true, ac = new AbortController(), on = { signal: ac.signal };
   var x = c.getContext('2d'), W = c.width, H = c.height, small = W < 900;
   // Ground: a grass strip over a band of soil.
-  var G = H - (small ? 150 : 104), GRASS = small ? 16 : 12;
+  var G = H - (small ? 150 : Math.round(H * .22)), GRASS = small ? 16 : 12;
   // Physics runs per 1/60 s tick on a fixed clock, so 120 Hz screens are not twice as fast.
   // Full power on release, then real losses: light air drag, energy lost on every bounce, rolling friction.
   var RAD = small ? 28 : 32, MAXPULL = small ? 150 : 190, MAXSPEED = small ? 30 : 36;
@@ -37,7 +37,8 @@ export function startHero(c, FONT, MONO) {
 
   // The name, carried by robots.
   // On wider scenes the name sits in the space left of the tree; on phones it spans the width.
-  var TREE_X = small ? W - 44 : W - 165, LEFT = EDGE, RIGHT = small ? W - EDGE : TREE_X - 50 - 34;
+  // The tree's leaves reach about 88px either side of its trunk, so the name stops well short of them.
+  var TREE_X = small ? W - 44 : W - 130, LEFT = EDGE, RIGHT = small ? W - EDGE : TREE_X - 135;
   var word = 'RAZAQ KHAN', FS = 110;
   x.font = 'bold ' + FS + 'px ' + FONT; while (x.measureText(word).width > RIGHT - LEFT && FS > 30) { FS -= 2; x.font = 'bold ' + FS + 'px ' + FONT; }
   var LH = FS * .48, cx = (LEFT + RIGHT) / 2 - x.measureText(word).width / 2, L = [];

@@ -56,7 +56,7 @@ const wrap = "max-w-[1200px] mx-auto px-4 sm:px-6";
 export default function HomePage() {
   return (
     <main className="home min-h-screen font-sans">
-      <div className="border-b border-(--h-line) bg-(--h-band) px-4 sm:px-6 py-3.5 flex flex-wrap justify-center items-baseline gap-x-[18px] gap-y-1 text-center">
+      <div className="border-b border-(--h-line) bg-(--h-band) px-4 sm:px-6 py-3.5 flex flex-col items-center gap-1 text-center">
         <p lang="ar" dir="rtl" className={`${amiri.className} m-0 text-lg sm:text-[22px] leading-[1.6]`}>
           لَيْسَ الشَّدِيدُ بِالصُّرَعَةِ، إِنَّمَا الشَّدِيدُ الَّذِي يَمْلِكُ نَفْسَهُ عِنْدَ الْغَضَبِ
         </p>
