@@ -14,11 +14,16 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Follow the site's own theme (the .dark class set by layout.tsx and ThemeToggle), not only the
+   device setting, so a light page never sits on a black background. color-scheme makes the
+   scrollbar and form controls match. */
+:root {
+  color-scheme: light;
+}
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  color-scheme: dark;
 }
 
 body {
@@ -55,6 +60,14 @@ body {
   --h-band: #191a18;
   --h-grid: rgba(255, 255, 255, 0.035);
   --h-accent: #5dcaa5;
+}
+
+/* On the home page, the area behind it (seen when the page bounces past its ends) is the same paper. */
+body:has(main.home) {
+  background: #f6f3ec;
+}
+.dark body:has(main.home) {
+  background: #141513;
 }
 
 /* The theme icon turning in when it changes (ThemeToggle). */
