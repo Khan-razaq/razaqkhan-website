@@ -88,6 +88,13 @@ const METHOD_TO_CARD_NAME: Record<string, string> = {
   Citi: "Citi",
 };
 
+// Today on this device's clock: toISOString() is UTC, which is already
+// tomorrow on a Boston evening.
+function localToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function nextDueDateInfo(dueDay: number | null): { days: number; date: Date } | null {
   if (!dueDay || dueDay < 1 || dueDay > 31) return null;
 
@@ -296,7 +303,7 @@ export default function ExpenseTracker({
         amount: parseFloat(amount),
         category,
         payment_method: paymentMethod,
-        expense_date: new Date().toISOString().split("T")[0],
+        expense_date: localToday(),
         bank_account_id: isCardMethod || isCash ? null : bankAccountId,
         credit_card_id: isCardMethod ? autoMatchedCardId || creditCardId : null,
       })
@@ -373,7 +380,7 @@ export default function ExpenseTracker({
       credit_card_id: payoffCardId,
       bank_account_id: payoffBankId,
       amount: balance.owed,
-      payment_date: new Date().toISOString().split("T")[0],
+      payment_date: localToday(),
       notes: "Paid off via dashboard",
     });
 
