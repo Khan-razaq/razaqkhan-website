@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import ThemeToggle from "../ThemeToggle";
+import AppSwitcher from "@/app/AppSwitcher";
 import { addCompany, relookupCompany } from "./actions";
 
 export type Company = {
@@ -186,6 +187,7 @@ export default function CompaniesClient({ companies }: { companies: Company[] })
               </p>
             </div>
             <div className="shrink-0 flex items-center gap-3">
+              <AppSwitcher />
               <ThemeToggle />
               <button
                 onClick={handleSignOut}

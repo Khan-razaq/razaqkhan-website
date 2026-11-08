@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import ThemeToggle from "../ThemeToggle";
+import AppSwitcher from "@/app/AppSwitcher";
 
 type PaymentMethod = "Discover" | "Amex" | "Citi" | "Cash" | "Debit";
 
@@ -420,6 +421,7 @@ export default function ExpenseTracker({
               </p>
             </div>
             <div className="flex items-center gap-3">
+              <AppSwitcher />
               <ThemeToggle />
               <button
                 onClick={handleSignOut}

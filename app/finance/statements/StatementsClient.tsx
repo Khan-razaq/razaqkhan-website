@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import ThemeToggle from "@/app/ThemeToggle";
+import AppSwitcher from "@/app/AppSwitcher";
 import { readStatementCsv, type StatementRow } from "@/lib/finance/statementCsv";
 import type { CheckResult } from "@/lib/finance/statementMatch";
 import { addMissingToInbox, runStatementCheck } from "./actions";
@@ -77,7 +78,8 @@ export default function StatementsClient({ targets, checks }: { targets: Target[
     <main className="min-h-screen bg-gray-50 dark:bg-gray-950 p-4 sm:p-6 md:p-12">
       <div className="max-w-2xl mx-auto space-y-4">
         <header className="relative">
-          <div className="absolute right-0 top-0">
+          <div className="absolute right-0 top-0 flex items-center gap-2">
+            <AppSwitcher />
             <ThemeToggle />
           </div>
           <Link

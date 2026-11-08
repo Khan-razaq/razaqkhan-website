@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ThemeToggle from "@/app/ThemeToggle";
+import AppSwitcher from "@/app/AppSwitcher";
 import { createClient } from "@/lib/supabase/client";
 
 type LoanType = "education" | "family" | "other";
@@ -959,7 +960,8 @@ export default function LoansClient({
     <main className="min-h-screen bg-gray-50 dark:bg-gray-950 p-6 md:p-12">
       <div className="max-w-6xl mx-auto">
         <header className="relative mb-8">
-          <div className="absolute right-0 top-0">
+          <div className="absolute right-0 top-0 flex items-center gap-2">
+            <AppSwitcher />
             <ThemeToggle />
           </div>
           <Link
