@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { CARD_PAYMENT, type StatementRow } from "@/lib/finance/statementCsv";
+import { middayOf } from "@/lib/timeZone";
 import { MATCH_WINDOW_DAYS, checkStatement, type CheckResult, type FixedBill, type MoneyRecord } from "@/lib/finance/statementMatch";
 
 // "card:<id>" or "account:<id>"
@@ -175,7 +176,7 @@ export async function addMissingToInbox(target: Target, rawRows: unknown): Promi
       sender: "Statement",
       subject: `From your ${owner.name} statement`,
       body,
-      email_date: `${row.date}T17:00:00Z`, // midday in Boston
+      email_date: middayOf(row.date),
       amount: Math.abs(row.amount),
       credit_card_id: parsed.kind === "card" ? parsed.id : null,
       bank_account_id: parsed.kind === "account" ? parsed.id : null,

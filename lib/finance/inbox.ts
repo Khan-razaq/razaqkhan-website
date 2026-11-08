@@ -11,6 +11,7 @@ import {
   type Bank,
 } from "./alerts";
 import { SCREENSHOT_SENDER, SCREENSHOT_SUBJECT, readTransactionList, screenshotBank } from "./screenshot";
+import { dateIn, middayOf } from "../timeZone";
 
 type Account = { id: string; name: string; issuer?: string };
 
@@ -32,9 +33,12 @@ const BANK_WORDS: Record<Bank, RegExp> = {
 // first, so that when a transaction-list screenshot is split, the purchases
 // the inbox already has (with their amounts) are there to be skipped. The
 // purchases split out of it are then read in a second pass.
-export async function readNewAlerts(supabase: SupabaseClient): Promise<void> {
+//
+// `timeZone` is where the user is, for screenshot lists' "Today" and
+// "Yesterday".
+export async function readNewAlerts(supabase: SupabaseClient, timeZone: string): Promise<void> {
   await readWaiting(supabase);
-  const added = await splitScreenshots(supabase);
+  const added = await splitScreenshots(supabase, timeZone);
   // By id: the same query twice in one page load gets the first answer back
   // (Next reuses identical requests), which wouldn't include these.
   if (added.length) await readWaiting(supabase, added);
@@ -52,7 +56,7 @@ async function readWaiting(supabase: SupabaseClient, ids?: string[]): Promise<vo
   const alerts = (waiting ?? []).filter(
     (a) =>
       !(a.sender === SCREENSHOT_SENDER && a.subject === SCREENSHOT_SUBJECT &&
-        readTransactionList(a.body, new Date(a.email_date)).length)
+        readTransactionList(a.body, dateIn("UTC", new Date(a.email_date))).length)
   );
   if (!alerts.length) return;
 
@@ -136,7 +140,7 @@ const BANK_NAMES: Record<Bank, string> = {
 // email, an earlier screenshot of the same list). Counting, not just
 // matching: two $5.25 coffees on one day stay two.
 // Returns the ids of the purchases added.
-async function splitScreenshots(supabase: SupabaseClient): Promise<string[]> {
+async function splitScreenshots(supabase: SupabaseClient, timeZone: string): Promise<string[]> {
   const added: string[] = [];
   const { data: shots } = await supabase
     .from("bank_alerts")
@@ -149,13 +153,13 @@ async function splitScreenshots(supabase: SupabaseClient): Promise<string[]> {
     .limit(50);
 
   for (const shot of shots ?? []) {
-    const items = readTransactionList(shot.body, new Date(shot.email_date));
+    const items = readTransactionList(shot.body, dateIn(timeZone, new Date(shot.email_date)));
     const bank = screenshotBank(shot.body);
     // Not a transaction list (a notification, say): the email reader reads it as it is.
     if (!items.length || !bank) continue;
 
     const dayMs = 24 * 60 * 60 * 1000;
-    const noon = (date: string) => new Date(`${date}T17:00:00Z`); // midday in Boston
+    const noon = (date: string) => new Date(middayOf(date));
     const times = items.map((i) => noon(i.date).getTime());
     const { data: existing } = await supabase
       .from("bank_alerts")

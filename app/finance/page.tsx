@@ -1,4 +1,6 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { requestTimeZone } from "@/lib/timeZone";
 import { createClient } from "@/lib/supabase/server";
 import ExpenseTracker from "./ExpenseTracker";
 import { countWaitingAlerts, readNewAlerts } from "@/lib/finance/inbox";
@@ -51,7 +53,7 @@ export default async function Home() {
   }
 
   // Read new bank alert emails so the Inbox count is current.
-  await readNewAlerts(supabase);
+  await readNewAlerts(supabase, requestTimeZone(await headers()));
   const inboxCount = await countWaitingAlerts(supabase);
 
   return (

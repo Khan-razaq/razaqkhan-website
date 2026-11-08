@@ -10,6 +10,7 @@ import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { parseAlert } from "@/lib/finance/alerts";
 import { SCREENSHOT_SENDER, SCREENSHOT_SUBJECT, readTransactionList, undatedAtTop } from "@/lib/finance/screenshot";
+import { dateIn, requestTimeZone } from "@/lib/timeZone";
 
 const reply = (text: string, status = 200) =>
   new Response(text, { status, headers: { "Content-Type": "text/plain; charset=utf-8" } });
@@ -46,10 +47,11 @@ export async function POST(request: Request) {
   }
   if (!added) return reply("Already sent this one.");
 
-  const items = readTransactionList(text, now);
+  const today = dateIn(requestTimeZone(request.headers), now);
+  const items = readTransactionList(text, today);
   // (Ones the Inbox already has are skipped when it's opened, so "new ones".)
   if (items.length) {
-    const undated = undatedAtTop(text, now);
+    const undated = undatedAtTop(text, today);
     const found = `Found ${items.length} ${items.length === 1 ? "transaction" : "transactions"}. New ones are in your Inbox.`;
     return reply(
       undated

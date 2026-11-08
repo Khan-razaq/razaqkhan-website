@@ -6,15 +6,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { merchantKey } from "@/lib/finance/alerts";
 import { parseCashPhrase } from "@/lib/finance/cashSpeech";
+import { dateIn, requestTimeZone } from "@/lib/timeZone";
 
 const say = (text: string, status = 200) =>
   new Response(text, { status, headers: { "Content-Type": "text/plain; charset=utf-8" } });
-
-// Today in Boston, not on the server's clock (UTC), so a late-evening
-// purchase isn't dated tomorrow.
-function todayInBoston(): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
-}
 
 export async function POST(request: Request) {
   let key: unknown, text: unknown;
@@ -40,7 +35,9 @@ export async function POST(request: Request) {
     p_amount: phrase.amount,
     p_category: phrase.category,
     p_merchant_key: merchantKey(phrase.description),
-    p_date: todayInBoston(),
+    // Today where the phone is, not on the server's clock (UTC), so a
+    // late-evening purchase isn't dated tomorrow.
+    p_date: dateIn(requestTimeZone(request.headers)),
   });
   if (error) {
     return error.message.includes("invalid key")
