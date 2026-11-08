@@ -55,10 +55,10 @@ export function startHero(c, FONT, MONO) {
   var word = 'RAZAQ KHAN', FS = 110;
   x.font = 'bold ' + FS + 'px ' + FONT; while (x.measureText(word).width > RIGHT - LEFT && FS > 30) { FS -= 2; x.font = 'bold ' + FS + 'px ' + FONT; }
   var LH = FS * .48, cx = (LEFT + RIGHT) / 2 - x.measureText(word).width / 2, L = [];
-  for (var q = 0; q < word.length; q++) { var ch = word[q], w = x.measureText(ch).width; if (ch !== ' ') L.push({ ch: ch, w: w, hx: cx + w / 2, hy: G - 14 - LH, x: cx + w / 2, y: G - 14 - LH, vx: 0, vy: 0, r: 0, vr: 0, st: 'home', wait: 0, snow: 0 }); cx += w; }
+  for (var q = 0; q < word.length; q++) { var ch = word[q], w = x.measureText(ch).width; if (ch !== ' ') L.push({ ch: ch, w: w, hx: cx + w / 2, hy: G - 14 - LH, x: cx + w / 2, y: G - 14 - LH, vx: 0, vy: 0, r: 0, vr: 0, st: 'home', wait: 0 }); cx += w; }
   var PER = small ? 6 : 10, R = [];
   L.forEach(function (l, j) { for (var k = 0; k < PER; k++) { var off = (k - (PER - 1) / 2) * (l.w / PER); R.push({ j: j, off: off, hx: l.hx + off, hy: G - 8, x: l.hx + off, y: G - 8, a: -Math.PI / 2, vx: 0, vy: 0, up: true }); } });
-  var REST_Y = G - LH + 2, CAP_TOP = FS * .36, SNOWCAP = small ? 10 : 8;
+  var REST_Y = G - LH + 2, CAP_TOP = FS * .36;
   var isHome = function (l) { return l.st === 'home' || l.st === 'wobble'; };
 
   // ---- The tree: a spring at its base, so a hit (or the wind) makes it sway and settle.
@@ -102,7 +102,7 @@ export function startHero(c, FONT, MONO) {
       for (var k = 0; k < (small ? 7 : 9); k++) { var ang = Math.random() * 6.283, rr = Math.random() * pr, ox = Math.cos(ang) * rr, oy = Math.sin(ang) * rr * FLAT; FX.push({ k: 'puff', x: px + ox, y: py + oy, vx: ox / pr * (.6 + Math.random() * 1.2) + S.v[0] * .12, vy: oy / pr * (.4 + Math.random() * .8) + S.v[1] * .06, life: 1, fade: .006 + Math.random() * .008, sz: pr * (.35 + Math.random() * .35) }); }
     });
   }
-  function knock(l, vx, vy, spin) { l.st = 'fall'; l.vx = vx; l.vy = vy; l.vr = spin; l.wait = 50; l.snow = 0; var j = L.indexOf(l); R.forEach(function (r) { if (r.j === j) { r.vx = (Math.random() - .5) * 12; r.vy = -Math.random() * 6; } }); }
+  function knock(l, vx, vy, spin) { l.st = 'fall'; l.vx = vx; l.vy = vy; l.vr = spin; l.wait = 50; var j = L.indexOf(l); R.forEach(function (r) { if (r.j === j) { r.vx = (Math.random() - .5) * 12; r.vy = -Math.random() * 6; } }); }
   // Every third time the name is knocked down, a robot walks out with a sign.
   function noteKnock() { knocks++; if (knocks % 3 === 0) sign = { t: SIGNS[(knocks / 3 - 1) % SIGNS.length], life: 420 }; }
   function sayTime() { var n = new Date(), tm = n.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), h = n.getHours(); var tag = h < 5 ? 'Still night. Go to sleep.' : h < 8 ? 'Rising slowly.' : h < 12 ? 'Morning shift.' : h < 15 ? 'Peak hours.' : h < 18 ? 'Golden hour soon.' : h < 20 ? 'Setting off for the day.' : 'Moon shift now.'; bubble = { t: "It's " + tm + '. ' + tag, life: 200 }; }
@@ -200,7 +200,7 @@ export function startHero(c, FONT, MONO) {
     if (WX.rain || WX.snow) n = Math.max(n, 5);
     if (n !== CL.length) CL = makeClouds(n);
     // Snow that has been falling a while has already settled a little.
-    if (WX.snow) { groundSnow = Math.max(groundSnow, .35 + .3 * WX.snow); T.snow = Math.max(T.snow, .5); L.forEach(function (l) { l.snow = Math.max(l.snow, SNOWCAP * .5); }); }
+    if (WX.snow) { groundSnow = Math.max(groundSnow, .6 + .3 * WX.snow); T.snow = Math.max(T.snow, .6); }
   }
 
   function updateWeather() {
@@ -211,8 +211,8 @@ export function startHero(c, FONT, MONO) {
     DROPS.forEach(function (d) {
       var py = d.y, hit = false; d.x += sx; d.y += d.v;
       if (d.y > 0) {
-        for (i = 0; i < L.length; i++) { l = L[i]; if (!isHome(l)) continue; var top = l.y - CAP_TOP - l.snow; if (Math.abs(d.x - l.x) < l.w * .42 && py < top && d.y >= top) { splash(d.x, top, 2); hit = true; break; } }
-        if (!hit && Math.hypot(d.x - S.p[0], d.y - S.p[1]) < RAD) { splash(d.x, d.y, 1); hit = true; }
+        for (i = 0; i < L.length; i++) { l = L[i]; if (!isHome(l)) continue; var top = l.y - CAP_TOP; if (Math.abs(d.x - l.x) < l.w * .42 && py < top && d.y >= top) { splash(d.x, top, 2); hit = true; break; } }
+        // The sun is far away in the sky, so rain passes in front of it; only near things catch it.
         if (!hit && Math.hypot(d.x - cc[0], d.y - cc[1]) < T.cr) hit = true;
         if (!hit && d.y >= d.floor) { if (Math.random() < .5) splash(d.x, d.floor, 1); hit = true; }
       }
@@ -222,16 +222,15 @@ export function startHero(c, FONT, MONO) {
     while (FLAKES.length < wantF) FLAKES.push(newFlake({}, true));
     if (FLAKES.length > wantF) FLAKES.length = wantF;
     FLAKES.forEach(function (f) {
-      var py = f.y, hit = false; f.x += WX.wind * .025 + Math.sin(f.ph + tick * .03) * .35; f.y += f.v;
+      var hit = false; f.x += WX.wind * .025 + Math.sin(f.ph + tick * .03) * .35; f.y += f.v;
       if (f.x < -10) f.x += W + 20; else if (f.x > W + 10) f.x -= W + 20;
-      for (i = 0; i < L.length; i++) { l = L[i]; if (!isHome(l)) continue; var top = l.y - CAP_TOP - l.snow; if (Math.abs(f.x - l.x) < l.w * .42 && py < top && f.y >= top) { l.snow = Math.min(SNOWCAP, l.snow + .12); hit = true; break; } }
-      if (!hit && Math.hypot(f.x - cc[0], f.y - cc[1]) < T.cr) { T.snow = Math.min(1, T.snow + .004); hit = true; }
-      if (!hit && Math.hypot(f.x - S.p[0], f.y - S.p[1]) < RAD) hit = true;
+      // Snow settles on the tree and the ground; it drifts past the name and the (distant) sun.
+      if (Math.hypot(f.x - cc[0], f.y - cc[1]) < T.cr) { T.snow = Math.min(1, T.snow + .004); hit = true; }
       if (!hit && f.y >= f.floor) { groundSnow = Math.min(1, groundSnow + .00025); hit = true; }
       if (hit) newFlake(f, false);
     });
     // Without snow falling, what settled melts away slowly.
-    if (!WX.snow) { groundSnow = Math.max(0, groundSnow - .0004); T.snow = Math.max(0, T.snow - .001); L.forEach(function (l) { l.snow = Math.max(0, l.snow - .01); }); }
+    if (!WX.snow) { groundSnow = Math.max(0, groundSnow - .0004); T.snow = Math.max(0, T.snow - .001); }
     // Thunder: a flash, a second fainter one a moment later, then quiet for 6 to 16 seconds.
     if (WX.thunder) { if (--nextBolt <= 0) { flashT = 1; flash2 = 9; nextBolt = 360 + Math.random() * 600; } if (flash2 > 0 && --flash2 === 0) flashT = .7; }
     flashT = Math.max(0, flashT - .07);
@@ -323,9 +322,19 @@ export function startHero(c, FONT, MONO) {
     var bendK = (WX.wind / 30) * (small ? 5 : 4);
     x.lineWidth = 1.1; BLADE.forEach(function (b) { var bend = bendK * (.6 + .4 * Math.sin(tick * .06 + b[0] * .03)); x.strokeStyle = rgb(mixc(g1, g2, b[3]), .85); x.beginPath(); x.moveTo(b[0], G + 3); x.lineTo(b[0] + b[2] + bend, G + 2 - b[1]); x.stroke(); });
     if (groundSnow > .01) {
-      var deep = GRASS + (H - G) * .45, gs = x.createLinearGradient(0, G - 3, 0, G + deep);
-      gs.addColorStop(0, rgb(snowCol, .95 * groundSnow)); gs.addColorStop(.35, rgb(snowCol, .8 * groundSnow)); gs.addColorStop(1, rgb(snowCol, 0));
-      x.fillStyle = gs; x.fillRect(0, G - 3, W, deep + 3);
+      // A blanket over the whole field: soft drifts along the top (deepest against the tree),
+      // cool blue shade further down, with a few grass blades poking through and a faint sparkle.
+      var cover = Math.min(1, groundSnow * 1.5), lift = (small ? 9 : 7) * cover, shade = mixc(snowCol, [150, 168, 196], .3);
+      var sb = x.createLinearGradient(0, G - lift, 0, H);
+      sb.addColorStop(0, rgb(snowCol, .97 * cover)); sb.addColorStop(.35, rgb(mixc(snowCol, shade, .5), .94 * cover)); sb.addColorStop(1, rgb(shade, .88 * cover));
+      x.fillStyle = sb; x.beginPath(); x.moveTo(0, H);
+      for (var sx = 0; sx <= W + 16; sx += 16) {
+        var drift = .55 + .45 * Math.sin(sx * .021) * Math.sin(sx * .0067 + 1.3), nearTree = Math.max(0, 1 - Math.abs(sx - T.x) / 70);
+        x.lineTo(sx, G - lift * drift - lift * .7 * nearTree);
+      }
+      x.lineTo(W + 16, H); x.closePath(); x.fill();
+      if (cover < .95) { x.lineWidth = 1.1; x.strokeStyle = rgb(g1, .8 * (1 - cover)); x.beginPath(); BLADE.forEach(function (b, i) { if (i % 5) return; x.moveTo(b[0], G + 1); x.lineTo(b[0] + b[2], G - b[1]); }); x.stroke(); }
+      PEB.forEach(function (p) { if (p[3] < .86) return; var tw = .5 + .5 * Math.sin(tick * .05 + p[0]); x.fillStyle = 'rgba(255,255,255,' + (.55 * tw * cover * Math.max(.3, lum)) + ')'; x.fillRect(p[0], p[1], 1.6, 1.6); });
     }
     var lit = x.createRadialGradient(S.p[0], G, 0, S.p[0], G, W * .5); lit.addColorStop(0, rgb(sc, day ? .14 : .05)); lit.addColorStop(1, rgb(sc, 0)); x.fillStyle = lit; x.fillRect(0, G, W, H - G);
   }
@@ -435,7 +444,6 @@ export function startHero(c, FONT, MONO) {
       x.save(); x.translate(l.x, l.y); x.rotate(l.r); x.fillStyle = isHome(l) ? fg : teal; x.font = 'bold ' + FS + 'px ' + FONT; x.textAlign = 'center'; x.textBaseline = 'middle';
       if (day && isHome(l)) { x.shadowColor = 'rgba(0,0,0,.18)'; x.shadowOffsetX = (l.x - S.p[0]) * .012; x.shadowOffsetY = 6; x.shadowBlur = 6; }
       x.fillText(l.ch, 0, 0);
-      if (l.snow > .4) { x.shadowColor = 'transparent'; var cw = l.w * (l.ch === 'A' ? .4 : .8); x.fillStyle = rgb(snowCol, .96); x.beginPath(); x.roundRect(-cw / 2, -CAP_TOP - l.snow + 2, cw, l.snow + 1, Math.min(4, l.snow / 2)); x.fill(); }
       x.restore();
     });
     drawSign(fg);
