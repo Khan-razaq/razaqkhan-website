@@ -27,7 +27,7 @@ function readFonts(): Fonts {
   };
 }
 
-function useScene(start: Start, small: boolean) {
+function useScene(start: Start, small: boolean, side = false) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     let stop: (() => void) | undefined;
@@ -39,7 +39,7 @@ function useScene(start: Start, small: boolean) {
       cancelled = true;
       stop?.();
     };
-  }, [start, small]);
+  }, [start, small, side]);
   return ref;
 }
 
@@ -47,15 +47,28 @@ const runHero: Start = (c, f) => startHero(c, f.sans, f.mono);
 const runSwarm: Start = (c, f) =>
   startSwarm(c, f.sans, () => document.documentElement.classList.contains("dark"));
 
+// Beside the introduction (large screens) the hero is a squarer 960×720 scene.
+const SIDE = "(min-width: 1024px)";
+const subscribeSide = (cb: () => void) => {
+  const mq = window.matchMedia(SIDE);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+};
+function useSide() {
+  return useSyncExternalStore(subscribeSide, () => window.matchMedia(SIDE).matches, () => true);
+}
+
 export function HeroScene() {
   const small = useSmall();
-  const ref = useScene(runHero, small);
+  const side = useSide();
+  const size = small ? [720, 820] : side ? [960, 720] : [1280, 560];
+  const ref = useScene(runHero, small, side);
   return (
     <canvas
-      key={small ? "small" : "wide"}
+      key={size.join("x")}
       ref={ref}
-      width={small ? 720 : 1280}
-      height={small ? 820 : 560}
+      width={size[0]}
+      height={size[1]}
       role="img"
       aria-label="Interactive scene: the name Razaq Khan rests on a row of small robots on a strip of grass and soil, beside a small tree, under a sky with drifting clouds that follows your local time. Tap the sun to hear the time, pull it back and let go to throw it; clouds it hits burst into mist and drift back later, and the tree sways and stops it. Tap the name to knock it down; the robots carry the letters back."
       className="block w-full h-auto touch-none cursor-grab"

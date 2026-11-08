@@ -36,16 +36,18 @@ export function startHero(c, FONT, MONO) {
   for (var bx = 0; bx < W; bx += small ? 3.5 : 3) BLADE.push([bx + rnd() * 3, 2 + rnd() * (small ? 8 : 6), (rnd() - .5) * 3, rnd()]);
 
   // The name, carried by robots.
+  // On wider scenes the name sits in the space left of the tree; on phones it spans the width.
+  var TREE_X = small ? W - 44 : W - 165, LEFT = EDGE, RIGHT = small ? W - EDGE : TREE_X - 50 - 34;
   var word = 'RAZAQ KHAN', FS = 110;
-  x.font = 'bold ' + FS + 'px ' + FONT; while (x.measureText(word).width > W - 2 * EDGE && FS > 30) { FS -= 2; x.font = 'bold ' + FS + 'px ' + FONT; }
-  var LH = FS * .48, cx = W / 2 - x.measureText(word).width / 2, L = [];
+  x.font = 'bold ' + FS + 'px ' + FONT; while (x.measureText(word).width > RIGHT - LEFT && FS > 30) { FS -= 2; x.font = 'bold ' + FS + 'px ' + FONT; }
+  var LH = FS * .48, cx = (LEFT + RIGHT) / 2 - x.measureText(word).width / 2, L = [];
   for (var q = 0; q < word.length; q++) { var ch = word[q], w = x.measureText(ch).width; if (ch !== ' ') L.push({ ch: ch, w: w, hx: cx + w / 2, hy: G - 14 - LH, x: cx + w / 2, y: G - 14 - LH, vx: 0, vy: 0, r: 0, vr: 0, st: 'home', wait: 0 }); cx += w; }
   var PER = small ? 6 : 10, R = [];
   L.forEach(function (l, j) { for (var k = 0; k < PER; k++) { var off = (k - (PER - 1) / 2) * (l.w / PER); R.push({ j: j, off: off, hx: l.hx + off, hy: G - 8, x: l.hx + off, y: G - 8, a: -Math.PI / 2, vx: 0, vy: 0, up: true }); } });
   var REST_Y = G - LH + 2;
 
   // The tree: a spring at its base, so a hit makes it sway and settle.
-  var T = { x: small ? W - 44 : W - 165, th: small ? 150 : 128, tw: small ? 14 : 12, cr: small ? 56 : 50, a: 0, va: 0 };
+  var T = { x: TREE_X, th: small ? 150 : 128, tw: small ? 14 : 12, cr: small ? 56 : 50, a: 0, va: 0 };
   var CAN = [[0, 0, 1], [-.62, .22, .7], [.62, .2, .72], [-.3, -.45, .68], [.34, -.42, .66], [0, .4, .62]];
   var treeAt = function (len) { return [T.x + Math.sin(T.a) * len, G - Math.cos(T.a) * len]; };
   var canopy = function () { return treeAt(T.th + T.cr * .15); };
