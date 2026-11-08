@@ -185,7 +185,7 @@ export default function CompaniesClient({ companies }: { companies: Company[] })
                 Companies saved from LinkedIn, with their careers pages.
               </p>
             </div>
-            <div className="shrink-0 flex items-start gap-3">
+            <div className="shrink-0 flex items-center gap-3">
               <ThemeToggle />
               <button
                 onClick={handleSignOut}
