@@ -22,8 +22,8 @@ const ICON = {
 const RESULTS = [
   { big: "8 h → 30 min", small: "Jetson firmware deployment, made push-button for assemblers · Clarapath" },
   { big: "4 h → 10 min", small: "Per-machine validation of a multi-motor subsystem, 30+ checkpoints · Clarapath" },
-  { big: "7 robots", small: "An autonomous mowing fleet covering 15 km a day on a 2,500-acre solar farm · Directed Machines" },
-  { big: "1st prize", small: "Published with Springer Nature: “ROS Based Autonomous Mobile Manipulator Robot” · Dr. Abdul Kalam Innovation Challenge" },
+  { big: "7 robots · 15 km/day", small: "Autonomous mowing fleet across a 2,500-acre solar farm · Directed Machines" },
+  { big: "Published · 1st prize", small: "“ROS Based Autonomous Mobile Manipulator Robot”, Springer Nature · Dr. Abdul Kalam Innovation Challenge" },
 ];
 
 const LAYERS = [
@@ -131,8 +131,9 @@ export default function HomePage() {
       <section aria-label="Results" className={`${wrap} pt-8 pb-2`}>
         <div className="flex flex-wrap gap-px bg-(--h-line) border border-(--h-line) rounded-[14px] overflow-hidden">
           {RESULTS.map((r) => (
-            <div key={r.big} className="grow basis-[220px] bg-(--h-card) px-[22px] pt-[22px] pb-5">
-              <p className="m-0 text-[26px] sm:text-3xl font-semibold tracking-[-0.02em] whitespace-nowrap">{r.big}</p>
+            <div key={r.big} className="@container grow basis-[220px] bg-(--h-card) px-[22px] pt-[22px] pb-5">
+              {/* One line always: the type scales with the card's width (up to 30px) so the longest headline fits. */}
+              <p className="m-0 text-[clamp(18px,9.4cqi,30px)] font-semibold tracking-[-0.02em] whitespace-nowrap">{r.big}</p>
               <p className="mt-1.5 mb-0 text-sm leading-normal text-(--h-muted)">{r.small}</p>
             </div>
           ))}
