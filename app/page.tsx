@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Amiri } from "next/font/google";
 import ThemeToggle from "@/app/ThemeToggle";
 import { HeroScene, SalaamSwarm } from "@/app/_home/Scenes";
+import CopyEmail from "@/app/_home/CopyEmail";
 
 const amiri = Amiri({ subsets: ["arabic"], weight: "400" });
 
@@ -11,19 +12,18 @@ const RESUME = "/razaq-khan-resume.pdf";
 
 // Icons are drawn inline: GitHub and LinkedIn as filled marks, the rest as outlines.
 const stroke = { fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" } as const;
-const LINKS = [
-  { label: EMAIL, href: `mailto:${EMAIL}`, external: false, icon: { ...stroke, children: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></> } },
-  { label: "github.com/marazaqkhan", href: "https://github.com/marazaqkhan", external: true, icon: { fill: "currentColor", children: <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" /> } },
-  { label: "linkedin.com/in/razaqkhanma", href: "https://www.linkedin.com/in/razaqkhanma", external: true, icon: { fill: "currentColor", children: <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" /> } },
-  { label: "Resume (PDF)", href: RESUME, external: true, icon: { ...stroke, children: <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M9 13h6M9 17h6" /></> } },
-  { label: "All projects", href: "/projects", external: false, icon: { ...stroke, children: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></> } },
-];
+const ICON = {
+  mail: { ...stroke, children: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></> },
+  resume: { ...stroke, children: <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M9 13h6M9 17h6" /></> },
+  github: { fill: "currentColor", children: <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" /> },
+  linkedin: { fill: "currentColor", children: <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" /> },
+};
 
 const RESULTS = [
   { big: "8 h → 30 min", small: "Jetson firmware deployment, made push-button for assemblers · Clarapath" },
   { big: "4 h → 10 min", small: "Per-machine validation of a multi-motor subsystem, 30+ checkpoints · Clarapath" },
-  { big: "7 robots · 15 km/day", small: "Autonomous mowing fleet across a 2,500-acre solar farm · Directed Machines" },
-  { big: "Published · 1st prize", small: "“ROS Based Autonomous Mobile Manipulator Robot”, Springer Nature · Dr. Abdul Kalam Innovation Challenge" },
+  { big: "7 robots", small: "An autonomous mowing fleet covering 15 km a day on a 2,500-acre solar farm · Directed Machines" },
+  { big: "1st prize", small: "Published with Springer Nature: “ROS Based Autonomous Mobile Manipulator Robot” · Dr. Abdul Kalam Innovation Challenge" },
 ];
 
 const LAYERS = [
@@ -99,24 +99,31 @@ export default function HomePage() {
             <p className="mt-4 mb-0 max-w-[600px] text-base sm:text-lg leading-relaxed text-(--h-muted)">
               Embedded networks, SLAM and navigation, perception, manipulation, the tools that make production fast, and a fleet of seven robots mowing a 2,500-acre solar farm. I like the whole stack, and I like it most when it works outside.
             </p>
-            <div className="mt-6 flex flex-wrap gap-2.5">
-              <a href={`mailto:${EMAIL}`} className="no-underline bg-(--h-ink) text-(--h-bg) px-5 py-[13px] rounded-full font-medium text-[15px]">Email me</a>
-              <a href={RESUME} target="_blank" rel="noopener noreferrer" className="no-underline border-[1.5px] border-(--h-ink) text-(--h-ink) px-5 py-3 rounded-full font-medium text-[15px]">Resume</a>
+            {/* One row of actions: email and resume as pills, GitHub and LinkedIn as round icon buttons. */}
+            <div className="mt-7 flex flex-wrap items-center gap-2.5">
+              <a href={`mailto:${EMAIL}`} className="inline-flex items-center gap-2 no-underline bg-(--h-ink) text-(--h-bg) pl-4 pr-5 h-12 rounded-full font-medium text-[15px] transition-transform hover:-translate-y-0.5">
+                <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" {...ICON.mail} />
+                Email me
+              </a>
+              <a href={RESUME} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 no-underline border-[1.5px] border-(--h-ink) text-(--h-ink) pl-4 pr-5 h-12 rounded-full font-medium text-[15px] transition-transform hover:-translate-y-0.5">
+                <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" {...ICON.resume} />
+                Resume
+              </a>
+              <a href="https://github.com/marazaqkhan" target="_blank" rel="noopener noreferrer" aria-label="GitHub: marazaqkhan" title="GitHub" className="inline-flex items-center justify-center w-12 h-12 rounded-full border border-(--h-line2) text-(--h-ink) transition-[transform,border-color] hover:-translate-y-0.5 hover:border-(--h-ink)">
+                <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" {...ICON.github} />
+              </a>
+              <a href="https://www.linkedin.com/in/razaqkhanma" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn: razaqkhanma" title="LinkedIn" className="inline-flex items-center justify-center w-12 h-12 rounded-full border border-(--h-line2) text-(--h-ink) transition-[transform,border-color] hover:-translate-y-0.5 hover:border-(--h-ink)">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" {...ICON.linkedin} />
+              </a>
             </div>
-            <ul className="list-none m-0 mt-6 p-0 flex flex-col gap-2.5 text-[15px]">
-              {LINKS.map((l) => (
-                <li key={l.label}>
-                  <a
-                    href={l.href}
-                    {...(l.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                    className="group inline-flex items-center gap-2.5 no-underline text-(--h-ink)"
-                  >
-                    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" className="shrink-0 text-(--h-accent)" {...l.icon} />
-                    <span className="border-b border-transparent group-hover:border-(--h-accent) pb-px">{l.label}</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
+            {/* Under it, quietly: the address to copy, and the way to all projects. */}
+            <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-(--h-muted)">
+              <CopyEmail email={EMAIL} />
+              <Link href="/projects" className="group inline-flex items-center gap-1.5 no-underline text-(--h-muted) hover:text-(--h-ink)">
+                All projects
+                <span aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">→</span>
+              </Link>
+            </div>
           </div>
         </div>
       </header>
@@ -125,7 +132,7 @@ export default function HomePage() {
         <div className="flex flex-wrap gap-px bg-(--h-line) border border-(--h-line) rounded-[14px] overflow-hidden">
           {RESULTS.map((r) => (
             <div key={r.big} className="grow basis-[220px] bg-(--h-card) px-[22px] pt-[22px] pb-5">
-              <p className="m-0 text-[26px] sm:text-3xl font-semibold tracking-[-0.02em]">{r.big}</p>
+              <p className="m-0 text-[26px] sm:text-3xl font-semibold tracking-[-0.02em] whitespace-nowrap">{r.big}</p>
               <p className="mt-1.5 mb-0 text-sm leading-normal text-(--h-muted)">{r.small}</p>
             </div>
           ))}
