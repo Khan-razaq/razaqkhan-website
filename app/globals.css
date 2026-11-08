@@ -32,42 +32,56 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Home page palette: warm paper with a faint engineering grid; dark mode swaps it. */
+/* Home page palette: a neutral warm white with faint topographic contour lines over the whole
+   page (public/topo.svg, made by scripts/make-topo.mjs). The tile is used as a mask, so the
+   lines take their colour from --h-topo and follow the theme. */
 .home {
-  --h-bg: #f6f3ec;
+  --h-bg: #f7f6f3;
   --h-ink: #1c1d1a;
   --h-muted: #5c5b55;
-  --h-line: #e2ded3;
-  --h-line2: #c9c4b6;
-  --h-card: #fbf9f4;
-  --h-band: #efebe1;
-  --h-grid: rgba(28, 29, 26, 0.045);
+  --h-line: #e4e2dd;
+  --h-line2: #cdcac3;
+  --h-card: #fcfbf9;
+  --h-band: #efeeea;
+  --h-topo: rgba(48, 42, 34, 0.11);
   --h-accent: #0f6e56;
+  position: relative;
+  isolation: isolate;
   background-color: var(--h-bg);
   color: var(--h-ink);
-  background-image:
-    linear-gradient(var(--h-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--h-grid) 1px, transparent 1px);
-  background-size: 32px 32px;
 }
 .dark .home {
-  --h-bg: #141513;
+  --h-bg: #141414;
   --h-ink: #eeece6;
   --h-muted: #a9a79f;
-  --h-line: #2e2f2b;
-  --h-line2: #4a4b46;
-  --h-card: #1b1c1a;
-  --h-band: #191a18;
-  --h-grid: rgba(255, 255, 255, 0.035);
+  --h-line: #2d2d2d;
+  --h-line2: #474747;
+  --h-card: #1b1b1b;
+  --h-band: #191919;
+  --h-topo: rgba(255, 255, 255, 0.075);
   --h-accent: #5dcaa5;
 }
+.home::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: var(--h-topo);
+  -webkit-mask-image: url("/topo.svg");
+  mask-image: url("/topo.svg");
+  -webkit-mask-size: 1024px 1024px;
+  mask-size: 1024px 1024px;
+  -webkit-mask-repeat: repeat;
+  mask-repeat: repeat;
+}
 
-/* On the home page, the area behind it (seen when the page bounces past its ends) is the same paper. */
+/* On the home page, the area behind it (seen when the page bounces past its ends) is the same colour. */
 body:has(main.home) {
-  background: #f6f3ec;
+  background: #f7f6f3;
 }
 .dark body:has(main.home) {
-  background: #141513;
+  background: #141414;
 }
 
 /* The theme icon turning in when it changes (ThemeToggle). */
