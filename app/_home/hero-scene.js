@@ -41,7 +41,12 @@ export function startHero(c, FONT, MONO) {
   }
   // The sun (and moon) cross the sky from the left edge to just short of the tree's leaves,
   // so at sunset it never sinks behind the tree where you can't see or grab it.
-  var spotFor = function (s) { var x0 = EDGE + 50, x1 = TREE_X - (small ? 100 : 92) - RAD - 12; return [x0 + (x1 - x0) * s.f, Math.max(RAD + 20, G - 40 - Math.abs(s.el) * (G - (small ? 260 : 170)))]; };
+  // Near sunrise and sunset it rests just above the top of the name rather than down among the
+  // letters, so there is always open sky around it to pull and throw from.
+  var spotFor = function (s) {
+    var x0 = EDGE + 50, x1 = TREE_X - (small ? 100 : 92) - RAD - 12, low = G - 14 - 2 * LH - RAD - 16;
+    return [x0 + (x1 - x0) * s.f, Math.max(RAD + 20, Math.min(low, G - 40 - Math.abs(s.el) * (G - (small ? 260 : 170))))];
+  };
   // Moon phase 0..1 (0 new, .5 full), from a known new moon and the synodic month.
   var moonPhase = function () { var P = 29.530588853, ref = Date.UTC(2000, 0, 6, 18, 14); return ((((Date.now() - ref) / 864e5) % P) + P) % P / P; };
 
@@ -89,7 +94,7 @@ export function startHero(c, FONT, MONO) {
   var SIGNS = ['please', 'again?', 'we just fixed that'];
   var knocks = 0, throwKnocked = false, sign = null, badge = null, cleared = false, asleep = false, lastActive = 0;
 
-  var S = { p: spotFor(sunAt(hourNow())), v: [0, 0], st: 'sky', t: 0, from: null, still: 0, ghost: false };
+  var S = { p: spotFor(sunAt(hourNow())), v: [0, 0], st: 'sky', t: 0, from: null, still: 0, freeTree: false, freeL: [] };
   var FX = [], ptr = null, pull = null, bubble = null, sunCol = [255, 240, 200], cloudCol = [255, 255, 255], tick = 0;
   var P = function (e) { var r = c.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
 
@@ -111,17 +116,18 @@ export function startHero(c, FONT, MONO) {
   // Any pointer activity wakes the robots with a little hop.
   function active() { lastActive = tick; if (asleep) { asleep = false; R.forEach(function (r) { r.vy = -2.5 - Math.random() * 2; }); } }
 
-  function treeHit() {
-    var cc = canopy(), cr = T.cr * .95, dx = S.p[0] - cc[0], dy = S.p[1] - cc[1], d = Math.hypot(dx, dy);
+  // margin (optional) widens the test, to ask "is the sun close to the tree" rather than "touching it".
+  function treeHit(margin) {
+    var m = margin || 0, cc = canopy(), cr = T.cr * .95 + m, dx = S.p[0] - cc[0], dy = S.p[1] - cc[1], d = Math.hypot(dx, dy);
     if (d < RAD + cr) return { n: [dx / (d || 1), dy / (d || 1)], depth: RAD + cr - d, lever: 1 };
     var top = treeAt(T.th), bx = top[0] - T.x, by = top[1] - G;
     var tt = Math.max(0, Math.min(1, ((S.p[0] - T.x) * bx + (S.p[1] - G) * by) / (bx * bx + by * by)));
     var ex = S.p[0] - (T.x + bx * tt), ey = S.p[1] - (G + by * tt), e = Math.hypot(ex, ey);
-    if (e < RAD + T.tw / 2) return { n: [ex / (e || 1), ey / (e || 1)], depth: RAD + T.tw / 2 - e, lever: tt };
+    if (e < RAD + T.tw / 2 + m) return { n: [ex / (e || 1), ey / (e || 1)], depth: RAD + T.tw / 2 - e, lever: tt };
     return null;
   }
 
-  c.addEventListener('pointermove', function (e) { active(); ptr = P(e); if (pull) { var a = pull.anchor, dx = ptr[0] - a[0], dy = ptr[1] - a[1], d = Math.hypot(dx, dy); if (d > MAXPULL) { dx *= MAXPULL / d; dy *= MAXPULL / d; } pull.d = Math.min(d, MAXPULL); pull.moved = pull.moved || d > 8; S.p = [a[0] + dx, a[1] + dy]; } }, on);
+  c.addEventListener('pointermove', function (e) { active(); ptr = P(e); if (pull) { var a = pull.anchor, dx = ptr[0] - a[0], dy = ptr[1] - a[1], d = Math.hypot(dx, dy); if (d > MAXPULL) { dx *= MAXPULL / d; dy *= MAXPULL / d; } pull.d = Math.min(d, MAXPULL); pull.moved = pull.moved || d > 8; S.p = [a[0] + dx, Math.min(G - RAD, a[1] + dy)]; } }, on);
   c.addEventListener('pointerleave', function () { ptr = null; }, on);
   c.addEventListener('pointerdown', function (e) {
     active(); var p = P(e); ptr = p;
@@ -136,13 +142,21 @@ export function startHero(c, FONT, MONO) {
     c.style.cursor = 'grab'; if (!pull) return; var a = pull.anchor;
     if (!pull.moved) { S.p = a.slice(); sayTime(); pull = null; return; }
     var dx = a[0] - S.p[0], dy = a[1] - S.p[1], k = (pull.d / MAXPULL) * MAXSPEED / (Math.hypot(dx, dy) || 1);
-    S.v = [dx * k, dy * k]; S.st = 'fly'; S.t = 0; S.still = 0; S.ghost = !!treeHit(); throwKnocked = false; pull = null;
+    S.v = [dx * k, dy * k]; S.st = 'fly'; S.t = 0; S.still = 0; startFree(); throwKnocked = false; pull = null;
   }, on);
 
+  // A throw that starts right next to a letter or the tree flies freely through *that* thing until
+  // it is clear of it; everything else (the other letters, the tree, the ground) still takes hits.
+  function nearLetter(l, m) { return isHome(l) && Math.abs(S.p[0] - l.x) < l.w / 2 + RAD + m && Math.abs(S.p[1] - l.y) < LH + RAD + m; }
+  function startFree() { S.freeTree = !!treeHit(24); S.freeL = L.map(function (l) { return nearLetter(l, 24); }); }
+  function updateFree() {
+    if (S.freeTree && !treeHit(8)) S.freeTree = false;
+    L.forEach(function (l, i) { if (S.freeL[i] && !nearLetter(l, 8)) S.freeL[i] = false; });
+  }
   function hitLetters() {
     var r = RAD;
-    L.forEach(function (l) {
-      if (!isHome(l)) return;
+    L.forEach(function (l, i) {
+      if (!isHome(l) || S.freeL[i]) return;
       var dx = S.p[0] - l.x, dy = S.p[1] - l.y, ox = l.w / 2 + r - Math.abs(dx), oy = LH + r - Math.abs(dy); if (ox <= 0 || oy <= 0) return;
       var nx = ox < oy ? Math.sign(dx) : 0, ny = ox < oy ? 0 : Math.sign(dy), vn = S.v[0] * nx + S.v[1] * ny; if (vn >= 0) return; var impact = -vn;
       if (impact > 7) { knock(l, S.v[0] * .75, Math.min(-6, S.v[1] * .5) - impact * .45, (Math.random() - .5) * impact * .03); if (!throwKnocked) { throwKnocked = true; noteKnock(); } }
@@ -152,7 +166,7 @@ export function startHero(c, FONT, MONO) {
   }
   function hitTree() {
     var hit = treeHit();
-    if (S.ghost) { if (!hit) S.ghost = false; return; }
+    if (S.freeTree) return;
     if (!hit) return;
     var n = hit.n; S.p[0] += n[0] * hit.depth; S.p[1] += n[1] * hit.depth;
     var vn = S.v[0] * n[0] + S.v[1] * n[1]; if (vn >= 0) return;
@@ -180,8 +194,9 @@ export function startHero(c, FONT, MONO) {
     if (S.p[1] > G - r) {
       S.p[1] = G - r;
       if (S.v[1] > 1.4) { if (S.v[1] > 2) dust(S.p[0], G, S.v[1] / MAXSPEED, 0, -1); S.v[1] *= -REST; S.v[0] *= .9; }
-      else { S.v[1] = 0; S.v[0] *= ROLL; }
+      else if (S.v[1] >= 0) { S.v[1] = 0; S.v[0] *= ROLL; } // rolling; a throw heading up keeps its speed
     }
+    updateFree();
     hitLetters(); hitTree(); hitClouds();
     S.still = Math.hypot(S.v[0], S.v[1]) < .35 ? S.still + 1 : 0;
     if (S.still > 30) { S.st = 'rest'; S.t = 0; }
