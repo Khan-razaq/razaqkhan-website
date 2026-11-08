@@ -39,7 +39,9 @@ export function startHero(c, FONT, MONO) {
     var a = K[i], b = K[i + 1], k = Math.max(0, Math.min(1, (el - a[0]) / (b[0] - a[0])));
     return { el: el, top: mixc(a[1], b[1], k), hor: mixc(a[2], b[2], k), sun: mixc(a[3], b[3], k), lum: Math.max(0, Math.min(1, (el + .08) * 2.2)) };
   }
-  var spotFor = function (s) { return [EDGE + 50 + (W - 2 * EDGE - 100) * s.f, Math.max(RAD + 20, G - 40 - Math.abs(s.el) * (G - (small ? 260 : 170)))]; };
+  // The sun (and moon) cross the sky from the left edge to just short of the tree's leaves,
+  // so at sunset it never sinks behind the tree where you can't see or grab it.
+  var spotFor = function (s) { var x0 = EDGE + 50, x1 = TREE_X - (small ? 100 : 92) - RAD - 12; return [x0 + (x1 - x0) * s.f, Math.max(RAD + 20, G - 40 - Math.abs(s.el) * (G - (small ? 260 : 170)))]; };
   // Moon phase 0..1 (0 new, .5 full), from a known new moon and the synodic month.
   var moonPhase = function () { var P = 29.530588853, ref = Date.UTC(2000, 0, 6, 18, 14); return ((((Date.now() - ref) / 864e5) % P) + P) % P / P; };
 
@@ -123,6 +125,7 @@ export function startHero(c, FONT, MONO) {
   c.addEventListener('pointerleave', function () { ptr = null; }, on);
   c.addEventListener('pointerdown', function (e) {
     active(); var p = P(e); ptr = p;
+    // Grabbing the sun always comes first, even where it overlaps a cloud or the tree's edge.
     if (S.st === 'sky' && Math.hypot(p[0] - S.p[0], p[1] - S.p[1]) < RAD + 28) { pull = { anchor: S.p.slice(), d: 0, moved: false }; c.style.cursor = 'grabbing'; c.setPointerCapture(e.pointerId); return; }
     var cc = canopy(); if (Math.hypot(p[0] - cc[0], p[1] - cc[1]) < T.cr * 1.1) { T.va += (p[0] < cc[0] ? 1 : -1) * .025; leaves(p[0], p[1], 4); if (T.snow > .1) { T.snow *= .4; } return; }
     // Only a tap on the name itself (with a small margin) knocks it down; sky, clouds and ground do nothing.
