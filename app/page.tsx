@@ -1,541 +1,192 @@
-"use client";
-
 import Image from "next/image";
 import Link from "next/link";
+import { Amiri } from "next/font/google";
 import ThemeToggle from "@/app/ThemeToggle";
-import { Mail } from "lucide-react";
-import { useState, useEffect } from "react";
+import { HeroScene, SalaamSwarm } from "@/app/_home/Scenes";
 
-export default function LandingPage() {
+const amiri = Amiri({ subsets: ["arabic"], weight: "400" });
+
+const EMAIL = "khan.razaqma@gmail.com";
+const RESUME = "/razaq-khan-resume.pdf";
+
+const RESULTS = [
+  { big: "8 h → 30 min", small: "Jetson firmware deployment, made push-button for assemblers · Clarapath" },
+  { big: "4 h → 10 min", small: "Per-machine validation of a multi-motor subsystem, 30+ checkpoints · Clarapath" },
+  { big: "7 robots · 15 km/day", small: "Autonomous mowing fleet across a 2,500-acre solar farm · Directed Machines" },
+  { big: "Published · 1st prize", small: "“ROS Based Autonomous Mobile Manipulator Robot”, Springer Nature · Dr. Abdul Kalam Innovation Challenge" },
+];
+
+const LAYERS = [
+  { step: "01", layer: "Embedded", where: "Farm Sathi, India · 2022–23", title: "One cable for three farm tools", body: "A modular RS485 network joining the tiller, sprayer and plower modules of an agricultural robot, with firmware for their messages and production-ready electrical boxes.", number: "3 subsystems on one bus", broke: "[YOUR STORY]", visual: "[Wiring and bus topology diagram]" },
+  { step: "02", layer: "Navigation", where: "Farm Sathi · Introbotics", title: "From teleoperation to waypoints", body: "RTK-GPS waypoint navigation on u-blox with a Pixhawk / ArduPilot controller for a field robot, and an indoor logistics AMR mapped with gmapping and localized with AMCL.", number: "Centimetre-level RTK fixes", broke: "[YOUR STORY]", visual: "[The map the AMR built, as an RViz recording]" },
+  { step: "03", layer: "Perception", where: "Northeastern · 2025", title: "Seeing terrain for a quadruped", body: "A ROS2 / RealSense elevation-mapping pipeline benchmarked on a Jetson Nano against a laptop for frame rate, CPU and heat, plus a Gazebo quadruped with a custom URDF for foothold detection.", number: "Jetson Nano vs laptop, profiled", broke: "[YOUR STORY]", visual: "[Elevation map replay]" },
+  { step: "04", layer: "Manipulation", where: "Introbotics · published", title: "A 5-DOF arm that finds and picks", body: "Vision-guided pick and place: YOLO and OpenCV find the object, MoveIt plans the arm. The mobile manipulator work became a paper with Springer Nature and won first prize.", number: "Published · 1st prize", broke: "[YOUR STORY]", visual: "[Pick-and-place clip or MoveIt replay]" },
+  { step: "05", layer: "Tooling and safety", where: "Clarapath, New York · 2024", title: "Making production boring, on purpose", body: "A one-click Jetson flashing tool for assemblers, Voila GUIs that drive motors and read encoders through 30+ checks, and ROS fail-safe logic around PLC door sensors near blades and UV light.", number: "8 h → 30 min · 4 h → 10 min", broke: "[YOUR STORY]", visual: "[Screenshot of the validation GUI]" },
+  { step: "06", layer: "The field", where: "Directed Machines, Indiana · 2026", title: "Seven robots, one solar farm", body: "Waypoint plans that thread mowers between panel rows, tuned for post clearance and obstacle width, plus remote calibration fixes and hands-on drivetrain, mower and antenna repairs.", number: "15 km a day · 13 acres a week", broke: "[YOUR STORY]", visual: "[Phone video of the fleet, if allowed]" },
+];
+
+const ROUTE = [
+  { when: "2022", where: "Introbotics", what: "Indoor AMR, 5-DOF arm" },
+  { when: "2022 – 23", where: "Farm Sathi", what: "RTK-GPS field robot, RS485" },
+  { when: "2023 – 25", where: "Northeastern", what: "MS Robotics" },
+  { when: "2024", where: "Clarapath", what: "Tooling and safety" },
+  { when: "2026", where: "Directed Machines", what: "Field fleet, solar farm" },
+  { when: "Now", where: "Robotics Field Engineer", what: "Land care robots · perception and controls", now: true },
+];
+
+const NOTES = [
+  { date: "[DATE]", title: "[A day something broke, and what the robot saw]" },
+  { date: "[DATE]", title: "[A fix you were proud of]" },
+  { date: "[DATE]", title: "[Something you learned in the field]" },
+];
+
+const eyebrow = "font-mono text-[13px] tracking-[0.08em] uppercase text-(--h-accent)";
+const wrap = "max-w-[1200px] mx-auto px-4 sm:px-6";
+
+export default function HomePage() {
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 relative overflow-hidden">
-      <style>{`
-        @keyframes pulseDot {
-          0%, 100% { opacity: var(--start-opacity); }
-          50% { opacity: var(--end-opacity); }
-        }
-        @keyframes sweep {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes drift {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          50% { transform: translate(80px, -50px) scale(1.1); }
-        }
-        @keyframes driftDiagonal {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          50% { transform: translate(-100px, -70px) scale(1.15); }
-        }
-        @keyframes breathe {
-          0%, 100% { transform: scale(1); opacity: 0.5; }
-          50% { transform: scale(1.3); opacity: 1; }
-        }
-        .bg-drift {
-          animation: drift 8s ease-in-out infinite;
-        }
-        .bg-drift-diagonal {
-          animation: driftDiagonal 7s ease-in-out infinite;
-        }
-        .bg-breathe {
-          animation: breathe 5s ease-in-out infinite;
-        }
+    <main className="home min-h-screen font-sans">
+      <div className="border-b border-(--h-line) bg-(--h-band) px-4 sm:px-6 py-3.5 flex flex-wrap justify-center items-baseline gap-x-[18px] gap-y-1 text-center">
+        <p lang="ar" dir="rtl" className={`${amiri.className} m-0 text-lg sm:text-[22px] leading-[1.6]`}>
+          لَيْسَ الشَّدِيدُ بِالصُّرَعَةِ، إِنَّمَا الشَّدِيدُ الَّذِي يَمْلِكُ نَفْسَهُ عِنْدَ الْغَضَبِ
+        </p>
+        <p className="m-0 text-sm italic text-(--h-muted)">
+          &ldquo;The strong is the one who controls himself when angry.&rdquo; — Prophet Muhammad ﷺ
+        </p>
+      </div>
 
-        @keyframes twinkle {
-          0%, 100% { opacity: 0.2; }
-          50% { opacity: 1; }
-        }
-
-        @keyframes meteorFly {
-          from {
-            translate: 0 0;
-          }
-          to {
-            translate: var(--end-x) var(--end-y);
-          }
-        }
-        @keyframes meteorTail {
-          0% { width: 0; opacity: 0; }
-          15% { width: 30px; opacity: 1; }
-          70% { width: 80px; opacity: 1; }
-          100% { width: 0; opacity: 0; }
-        }
-
-        .fade-in-up {
-          animation: fadeInUp 0.8s ease-out forwards;
-          opacity: 0;
-        }
-        .fade-delay-1 { animation-delay: 0.1s; }
-        .fade-delay-2 { animation-delay: 0.25s; }
-        .fade-delay-3 { animation-delay: 0.4s; }
-        .fade-delay-4 { animation-delay: 0.55s; }
-        .fade-delay-5 { animation-delay: 0.7s; }
-        .bg-drift {
-          animation: drift 18s ease-in-out infinite;
-        }
-        .sweep-line {
-          animation: sweep 6s linear infinite;
-          transform-origin: 200px 200px;
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .bg-drift, .bg-drift-diagonal, .bg-breathe, .star-layer { animation: none; }
-        }
-      `}</style>
-
-      {/* Starlight (dark mode only) */}
-      <Starlight />
-
-      {/* Background glows. Soft radial gradients rather than blurred
-          circles: they look the same, but a blur has to be redrawn as it
-          moves, which made phones stutter. */}
-      {/* Accent — drifts gently */}
-      <div
-        aria-hidden="true"
-        className="absolute -top-32 -right-32 w-[700px] h-[700px] rounded-full bg-[radial-gradient(closest-side,rgb(20_184_166/0.16),rgb(20_184_166/0.06)_60%,transparent)] dark:bg-[radial-gradient(closest-side,rgb(45_212_191/0.09),rgb(45_212_191/0.03)_60%,transparent)] pointer-events-none bg-drift will-change-transform"
-      />
-
-      {/* Light-mode-only cloud: lower-left, drifts diagonally */}
-      <div
-        aria-hidden="true"
-        className="dark:hidden absolute -bottom-40 -left-40 w-[600px] h-[600px] rounded-full bg-[radial-gradient(closest-side,rgb(45_212_191/0.13),rgb(45_212_191/0.05)_60%,transparent)] pointer-events-none bg-drift-diagonal will-change-transform"
-      />
-
-      {/* Light-mode-only cloud: middle-right, breathes in place */}
-      <div
-        aria-hidden="true"
-        className="dark:hidden absolute top-1/3 -right-20 w-[400px] h-[400px] rounded-full bg-[radial-gradient(closest-side,rgb(103_232_249/0.12),rgb(103_232_249/0.04)_60%,transparent)] pointer-events-none bg-breathe will-change-transform"
-      />
-
-      {/* Top nav — photo, hadith, projects link */}
-      <nav className="relative z-10 grid grid-cols-[auto_1fr] md:grid-cols-[auto_1fr_auto] items-center gap-4 px-6 md:px-12 py-10">
-        <Image
-          src="/me.jpeg"
-          alt="Razaq Khan"
-          width={120}
-          height={120}
-          loading="eager"
-          className="w-30 h-30 rounded-full object-cover object-top border border-slate-200 dark:border-slate-800"
-        />
-        <div className="col-span-2 md:col-span-1 order-last md:order-none text-center">
-          <p
-            className="text-xl text-slate-700 dark:text-slate-300 leading-tight"
-            dir="rtl"
-            lang="ar"
-            style={{ fontFamily: "'Amiri', 'Scheherazade New', 'Noto Naskh Arabic', serif" }}
-          >
-            لَيْسَ الشَّدِيدُ بِالصُّرَعَةِ، إِنَّمَا الشَّدِيدُ الَّذِي يَمْلِكُ نَفْسَهُ عِنْدَ الْغَضَبِ
-          </p>
-          <p className="italic text-lg text-slate-500 dark:text-slate-500 mt-1">
-            &quot;The strong is the one who controls himself when angry.&quot; — Prophet Mohammad ﷺ (pbuh)
-          </p>
-        </div>
-        <div className="flex items-center gap-5 text-sm">
-          <a href="/razaq-khan-resume.pdf"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors">
-            Resume
-          </a>
-          <Link
-            href="/projects"
-            className="text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors">
-            Projects
-          </Link>
+      <nav aria-label="Main" className={`${wrap} py-4 flex flex-wrap items-center justify-between gap-3`}>
+        <a href="#top" className="inline-flex items-center gap-2.5 font-semibold text-[17px] tracking-[-0.01em] no-underline text-(--h-ink)">
+          <Image src="/me.jpeg" alt="" width={34} height={34} className="w-[34px] h-[34px] rounded-full object-cover object-top" />
+          Razaq Khan
+        </a>
+        <div className="flex flex-wrap items-center gap-3.5 sm:gap-[22px] text-[15px]">
+          <a href="#stack" className="no-underline text-(--h-muted) hover:text-(--h-ink)">Work</a>
+          <a href="#route" className="no-underline text-(--h-muted) hover:text-(--h-ink)">Route</a>
+          <a href="#notes" className="no-underline text-(--h-muted) hover:text-(--h-ink)">Notes</a>
+          <a href={RESUME} target="_blank" rel="noopener noreferrer" className="no-underline text-(--h-muted) hover:text-(--h-ink)">Resume</a>
           <ThemeToggle />
         </div>
       </nav>
 
-      {/* Hero */}
-      <section className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 pt-2 md:pt-2 pb-24">
-        <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-12 lg:gap-16 items-center">
-          {/* LEFT */}
-          <div>
-            <p className="text-xs uppercase tracking-[0.25em] text-teal-600 dark:text-teal-400 mb-4 font-medium fade-in-up fade-delay-1">
-              Robotics engineer
-            </p>
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[0.95] fade-in-up fade-delay-2">
-              Razaq <span className="text-teal-600 dark:text-teal-400">Khan</span>
+      <header id="top" className={wrap}>
+        <div className="rounded-2xl overflow-hidden border border-(--h-line)">
+          <HeroScene />
+        </div>
+        <p className="mt-2.5 mx-0.5 mb-0 font-mono text-xs text-(--h-muted)">
+          Tap the sun for the time · pull it back and let go · hit a cloud or the tree · tap the name
+        </p>
+
+        <div className="flex flex-wrap items-end justify-between gap-6 pt-7 sm:pt-10 px-0.5 pb-2">
+          <div className="grow-[999] basis-[520px] min-w-0">
+            <p className={`${eyebrow} mb-2.5`}>Robotics engineer · MS Robotics, Northeastern</p>
+            <h1 className="m-0 text-[34px] sm:text-[52px] leading-[1.05] tracking-[-0.03em] font-semibold">
+              I take robots from the circuit board to the field.
             </h1>
-
-            <p className="mt-10 max-w-2xl text-lg md:text-xl text-slate-700 dark:text-slate-300 leading-relaxed fade-in-up fade-delay-3">
-              Robotics engineer at Directed Machines. I work on autonomous land
-              care robots, and I&apos;m most interested in perception and
-              controls. Off the clock, I&apos;m outdoors — usually hiking.
+            <p className="mt-4 mb-0 max-w-[640px] text-base sm:text-lg leading-relaxed text-(--h-muted)">
+              Embedded networks, SLAM and navigation, perception, manipulation, the tools that make production fast, and a fleet of seven robots mowing a 2,500-acre solar farm. I like the whole stack, and I like it most when it works outside.
             </p>
+          </div>
+          <div className="flex flex-wrap gap-2.5">
+            <a href={`mailto:${EMAIL}`} className="no-underline bg-(--h-ink) text-(--h-bg) px-5 py-[13px] rounded-full font-medium text-[15px]">Email me</a>
+            <a href={RESUME} target="_blank" rel="noopener noreferrer" className="no-underline border-[1.5px] border-(--h-ink) text-(--h-ink) px-5 py-3 rounded-full font-medium text-[15px]">Resume</a>
+          </div>
+        </div>
+      </header>
 
-            <div className="mt-10 flex flex-col gap-2 text-sm fade-in-up fade-delay-4">
-              <a href="mailto:khan.razaqma@gmail.com" className="group inline-flex items-center gap-2 text-slate-700 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 transition-colors w-fit">
-                <Mail className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                <span className="border-b border-transparent group-hover:border-teal-600 dark:group-hover:border-teal-400 pb-0.5">khan.razaqma@gmail.com</span>
-              </a>
-              <a href="https://github.com/marazaqkhan" target="_blank" rel="noopener noreferrer" className="group inline-flex items-center gap-2 text-slate-700 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 transition-colors w-fit">
-                <svg className="w-4 h-4 text-teal-600 dark:text-teal-400" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-                </svg>
-                <span className="border-b border-transparent group-hover:border-teal-600 dark:group-hover:border-teal-400 pb-0.5">github.com/marazaqkhan</span>
-              </a>
-              <a href="https://www.linkedin.com/in/razaqkhanma" target="_blank" rel="noopener noreferrer" className="group inline-flex items-center gap-2 text-slate-700 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 transition-colors w-fit">
-                <svg className="w-4 h-4 text-teal-600 dark:text-teal-400" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                </svg>
-                <span className="border-b border-transparent group-hover:border-teal-600 dark:group-hover:border-teal-400 pb-0.5">linkedin.com/in/razaqkhanma</span>
-              </a>
+      <section aria-label="Results" className={`${wrap} pt-8 pb-2`}>
+        <div className="flex flex-wrap gap-px bg-(--h-line) border border-(--h-line) rounded-[14px] overflow-hidden">
+          {RESULTS.map((r) => (
+            <div key={r.big} className="grow basis-[220px] bg-(--h-card) px-[22px] pt-[22px] pb-5">
+              <p className="m-0 text-[26px] sm:text-3xl font-semibold tracking-[-0.02em]">{r.big}</p>
+              <p className="mt-1.5 mb-0 text-sm leading-normal text-(--h-muted)">{r.small}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section id="stack" aria-labelledby="stack-h" className={`${wrap} pt-[52px] sm:pt-[72px] pb-2`}>
+        <p className={`${eyebrow} mb-2`}>The work, layer by layer</p>
+        <h2 id="stack-h" className="mt-0 mb-7 text-[28px] sm:text-4xl tracking-[-0.02em] font-semibold">From the circuit board to the field</h2>
+        <div className="flex flex-col gap-4">
+          {LAYERS.map((l) => (
+            <article key={l.step} className="flex flex-wrap gap-5 bg-(--h-card) border border-(--h-line) rounded-[14px] p-4 sm:p-[22px]">
+              <div className="grow basis-[300px] min-w-0 aspect-video rounded-[10px] border-[1.5px] border-dashed border-(--h-line2) flex items-center justify-center text-center p-4 font-mono text-[13px] text-(--h-muted)">
+                {l.visual}
+              </div>
+              <div className="grow-[999] basis-[420px] min-w-0 flex flex-col gap-2.5">
+                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                  <span className="font-mono text-xs tracking-[0.06em] uppercase text-(--h-accent)">{l.step} · {l.layer}</span>
+                  <span className="text-[13px] text-(--h-muted)">{l.where}</span>
+                </div>
+                <h3 className="m-0 text-[22px] tracking-[-0.01em] font-semibold">{l.title}</h3>
+                <p className="m-0 text-base leading-relaxed text-(--h-muted)">{l.body}</p>
+                <div className="flex flex-wrap gap-x-5 gap-y-2 mt-1 text-sm">
+                  <span className="font-semibold">{l.number}</span>
+                  <span className="text-(--h-muted)">What broke: {l.broke}</span>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section id="route" aria-labelledby="route-h" className={`${wrap} pt-[52px] sm:pt-[72px] pb-2`}>
+        <p className={`${eyebrow} mb-2`}>Route so far</p>
+        <h2 id="route-h" className="mt-0 mb-7 text-[28px] sm:text-4xl tracking-[-0.02em] font-semibold">Waypoints</h2>
+        <ol className="list-none m-0 p-0 flex flex-wrap gap-x-3 gap-y-4">
+          {ROUTE.map((s) => (
+            <li key={s.when} className={`grow basis-[150px] min-w-0 border-t-[3px] pt-3 ${s.now ? "border-(--h-accent)" : "border-(--h-line2)"}`}>
+              <p className="m-0 font-mono text-xs text-(--h-muted)">{s.when}</p>
+              <p className="mt-1.5 mb-0.5 text-base font-semibold">{s.where}</p>
+              <p className="m-0 text-sm leading-normal text-(--h-muted)">{s.what}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section id="notes" aria-labelledby="notes-h" className={`${wrap} pt-[52px] sm:pt-[72px] pb-2`}>
+        <div className="flex flex-wrap gap-8">
+          <div className="grow-[999] basis-[560px] min-w-0">
+            <p className={`${eyebrow} mb-2`}>Field notes</p>
+            <h2 id="notes-h" className="mt-0 mb-5 text-[28px] sm:text-4xl tracking-[-0.02em] font-semibold">What the robot saw today</h2>
+            <div className="flex flex-col border-t border-(--h-line)">
+              {NOTES.map((n, i) => (
+                <a key={i} href="#notes" className="flex flex-wrap gap-x-5 gap-y-1 py-4 border-b border-(--h-line) no-underline text-(--h-ink)">
+                  <span className="basis-[120px] shrink-0 font-mono text-[13px] text-(--h-muted)">{n.date}</span>
+                  <span className="grow-[999] basis-[240px] text-base">{n.title}</span>
+                </a>
+              ))}
             </div>
           </div>
-
-          {/* RIGHT: animated point cloud */}
-          <div className="hidden lg:flex justify-center items-center fade-in-up fade-delay-5">
-            <PointCloudSVG />
+          <div className="grow basis-[280px] min-w-0">
+            <p className={`${eyebrow} mb-2`}>Education</p>
+            <p className="m-0 text-base font-semibold">MS Robotics, Northeastern University</p>
+            <p className="mt-0.5 mb-3.5 text-sm text-(--h-muted)">Boston · 2023 – 2025</p>
+            <p className="m-0 text-base font-semibold">BE Electronics and Communication, Osmania University</p>
+            <p className="mt-0.5 mb-3.5 text-sm text-(--h-muted)">Hyderabad · 2018 – 2022</p>
+            <p className={`${eyebrow} mt-[18px] mb-2`}>Off the clock</p>
+            <p className="m-0 text-[15px] leading-relaxed text-(--h-muted)">Usually on a trail. [YOUR FAVOURITE HIKE OR TRAIL STATS]</p>
           </div>
         </div>
       </section>
 
-      {/* NOW section */}
-        <section className="relative z-10 max-w-3xl mx-auto px-6 md:px-12 pb-24 fade-in-up fade-delay-5">
-          <div className="border-l-2 border-teal-500 dark:border-teal-400 pl-6 py-2">
-            <p className="text-xs uppercase tracking-[0.25em] text-teal-600 dark:text-teal-400 mb-3 font-medium">
-              Now
-            </p>
-            <p className="text-base md:text-lg text-slate-700 dark:text-slate-300 leading-relaxed mb-2">
-              Robotics Field Engineer at <strong className="text-slate-900 dark:text-slate-100">Directed Machines</strong>, building autonomous land care robots in Indiana.
-            </p>
-            <p className="text-base md:text-lg text-slate-700 dark:text-slate-300 leading-relaxed mb-2">
-              Most days: deploying robots, debugging perception pipelines, getting deeper into controls.
-            </p>
-            <p className="text-xs text-slate-500 dark:text-slate-500 mt-4">Updated May 2026.</p>
-          </div>
-        </section>
-
-        {/* PROJECTS section */}
-        <section className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 pb-32">
-          <div className="flex items-baseline justify-between mb-8">
-            <h2 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-100">
-              Selected projects
-            </h2>
-            <Link
-              href="/projects"
-              className="text-sm text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
-            >
-              All projects →
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <ProjectCard
-              slug="point-cloud-elevation"
-              title="Point Cloud Elevation Mapping"
-              description="Real-time terrain reconstruction from depth sensors for off-road navigation."
-              tags={["ROS2", "PCL", "C++"]}
-            />
-            <ProjectCard
-              slug="deepfake-detection"
-              title="Deepfake Detection Pipeline"
-              description="CNN-based classifier trained on face manipulation datasets with real-time inference."
-              tags={["PyTorch", "OpenCV", "Python"]}
-            />
-            <ProjectCard
-              slug="finance-dashboard"
-              title="Personal Finance Dashboard"
-              description="Full-stack app for tracking expenses, loans, and savings with auto-recommendation engine."
-              tags={["Next.js", "Supabase", "TypeScript"]}
-            />
-          </div>
-        </section>
-        
-        {/* Footer */}
-        <footer className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 py-8 text-center border-t border-slate-200 dark:border-slate-800">
-          <p className="text-xs text-slate-500 dark:text-slate-500">
-            © 2026 Razaq Khan. All rights reserved.
-          </p>
-        </footer>
-
-    </main>
-  );
-}
-
-const STAR_LAYERS = [
-  { duration: 4, delay: 0 },
-  { duration: 5.5, delay: 1.3 },
-  { duration: 7, delay: 2.6 },
-];
-
-function Starlight() {
-  // Static twinkling stars (unchanged)
-  const stars = Array.from({ length: 120 }, (_, i) => {
-    const seed = i * 17;
-    const x = ((seed * 13) % 1000) / 10;
-    const y = ((seed * 23) % 1000) / 10;
-    const size = 1 + ((seed * 7) % 30) / 30;
-    const opacity = 0.3 + ((seed * 5) % 70) / 100;
-    return { x, y, size, opacity };
-  });
-
-  // State to hold currently-active meteors
-  const [meteors, setMeteors] = useState<Meteor[]>([]);
-
-  // Randomly spawn meteors
-  useEffect(() => {
-    let active = true;
-
-    const spawn = () => {
-      if (!active) return;
-
-      // Random start position (somewhere in upper half of viewport)
-      const startX = Math.random() * 100; // vw %
-      const startY = Math.random() * 40; // vh %
-
-      // Random angle: meteors fall down-and-to-the-side
-      // angleRad between 30° and 60° below horizontal
-      const angleDeg = 30 + Math.random() * 30;
-      const direction = Math.random() < 0.5 ? -1 : 1; // left or right
-      const angleRad = (angleDeg * Math.PI) / 180;
-
-      // Travel distance in viewport units (roughly diagonal across)
-      const distance = 60 + Math.random() * 30; // vh units
-
-      // End position
-      const endX = startX + direction * distance * Math.cos(angleRad);
-      const endY = startY + distance * Math.sin(angleRad);
-
-      // CSS rotation angle (the streak should point in direction of motion)
-      // atan2 of motion vector. CSS rotates clockwise from +x axis.
-      const cssAngle =
-        (Math.atan2(endY - startY, endX - startX) * 180) / Math.PI;
-
-      const meteor: Meteor = {
-        id: Date.now() + Math.random(),
-        startX,
-        startY,
-        endX,
-        endY,
-        cssAngle,
-        duration: 1.2 + Math.random() * 0.8, // 1.2-2.0 seconds
-      };
-
-      setMeteors((prev) => [...prev, meteor]);
-
-      // Remove after animation completes
-      setTimeout(() => {
-        setMeteors((prev) => prev.filter((m) => m.id !== meteor.id));
-      }, meteor.duration * 1000 + 100);
-
-      // Schedule next meteor (random interval)
-      const nextDelay = 4000 + Math.random() * 12000; // 4-16 seconds
-      setTimeout(spawn, nextDelay);
-    };
-
-    // Start the first meteor after a short delay
-    const initialDelay = setTimeout(spawn, 2000);
-
-    return () => {
-      active = false;
-      clearTimeout(initialDelay);
-    };
-  }, []);
-
-  return (
-    <div
-      aria-hidden="true"
-      className="hidden dark:block fixed inset-0 pointer-events-none z-0 overflow-hidden"
-    >
-      {/* Twinkling stars: each third of them twinkles together, on its own
-          rhythm (three animations rather than one per star) */}
-      {STAR_LAYERS.map((layer, g) => (
-        <div
-          key={g}
-          className="star-layer absolute inset-0 will-change-[opacity]"
-          style={{ animation: `twinkle ${layer.duration}s ease-in-out ${layer.delay}s infinite` }}
-        >
-          {stars
-            .filter((_, i) => i % STAR_LAYERS.length === g)
-            .map((s, i) => (
-              <div
-                key={i}
-                className="absolute bg-white rounded-full"
-                style={{
-                  left: `${s.x}%`,
-                  top: `${s.y}%`,
-                  width: `${s.size}px`,
-                  height: `${s.size}px`,
-                  opacity: s.opacity,
-                  boxShadow: `0 0 ${s.size * 2}px rgba(255, 255, 255, 0.5)`,
-                }}
-              />
-            ))}
+      <footer aria-label="Contact" className={`${wrap} pt-14 sm:pt-20 pb-10`}>
+        <div className="rounded-2xl overflow-hidden border border-(--h-line) bg-(--h-card)">
+          <SalaamSwarm />
         </div>
-      ))}
-
-      {/* Active meteors */}
-      {meteors.map((m) => (
-        <MeteorStreak key={m.id} meteor={m} />
-      ))}
-    </div>
-  );
-}
-
-type Meteor = {
-  id: number;
-  startX: number;
-  startY: number;
-  endX: number;
-  endY: number;
-  cssAngle: number;
-  duration: number;
-};
-
-function MeteorStreak({ meteor }: { meteor: Meteor }) {
-  return (
-    <div
-      className="absolute"
-      style={{
-        left: `${meteor.startX}vw`,
-        top: `${meteor.startY}vh`,
-        transform: `rotate(${meteor.cssAngle}deg)`,
-        transformOrigin: "left center",
-        animation: `meteorFly ${meteor.duration}s ease-out forwards`,
-        // Pass end position as CSS custom properties
-        ["--end-x" as string]: `${meteor.endX - meteor.startX}vw`,
-        ["--end-y" as string]: `${meteor.endY - meteor.startY}vh`,
-      }}
-    >
-      {/* Tail: a gradient that grows from 0 to full length, then shrinks */}
-      <div
-        className="h-px"
-        style={{
-          background:
-            "linear-gradient(90deg, transparent, rgba(255,255,255,0.9), rgba(255,255,255,0.4))",
-          boxShadow: "0 0 4px rgba(255,255,255,0.6)",
-          animation: `meteorTail ${meteor.duration}s ease-out forwards`,
-        }}
-      />
-    </div>
-  );
-}
-
-function PointCloudSVG() {
-  const dots: { cx: number; cy: number; r: number; opacity: number; delay: number }[] = [];
-  const gridSize = 18;
-  const spacing = 22;
-  const offsetX = 200 - (gridSize * spacing) / 2;
-  const offsetY = 200 - (gridSize * spacing) / 2;
-  const centerX = 200;
-  const centerY = 200;
-  const sphereRadius = 150;
-
-  for (let i = 0; i < gridSize; i++) {
-    for (let j = 0; j < gridSize; j++) {
-      const x = offsetX + i * spacing;
-      const y = offsetY + j * spacing;
-      const dx = x - centerX;
-      const dy = y - centerY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < sphereRadius) {
-        const opacity = 0.15 + 0.85 * (1 - dist / sphereRadius);
-        const r = 1 + 1.5 * (1 - dist / sphereRadius);
-        // Stagger pulse delay based on position so dots don't pulse in sync
-        const delay = ((dx + dy + 200) / 400) * 3;
-        dots.push({ cx: x, cy: y, r, opacity, delay });
-      }
-    }
-  }
-
-  return (
-    <svg
-      viewBox="0 0 400 400"
-      className="w-full max-w-md"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      {/* Outer ring */}
-      <circle
-        cx="200"
-        cy="200"
-        r="170"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1"
-        className="text-slate-300 dark:text-slate-700"
-        strokeDasharray="2 4"
-      />
-      {/* Crosshair */}
-      <line x1="30" y1="200" x2="370" y2="200" stroke="currentColor" strokeWidth="0.5" className="text-slate-300 dark:text-slate-700" />
-      <line x1="200" y1="30" x2="200" y2="370" stroke="currentColor" strokeWidth="0.5" className="text-slate-300 dark:text-slate-700" />
-
-      {/* Sweep arc */}
-      <g className="sweep-line">
-        <defs>
-          <linearGradient id="sweepGrad" x1="0%" y1="50%" x2="100%" y2="50%">
-            <stop offset="0%" stopColor="currentColor" stopOpacity="0" className="text-teal-500" />
-            <stop offset="100%" stopColor="currentColor" stopOpacity="0.4" className="text-teal-500" />
-          </linearGradient>
-        </defs>
-        <path
-          d="M 200 200 L 370 200 A 170 170 0 0 0 320 80 Z"
-          fill="url(#sweepGrad)"
-          opacity="0.3"
-        />
-      </g>
-
-      {/* Point cloud dots, each pulsing on its own staggered delay */}
-      {dots.map((d, i) => (
-        <circle
-          key={i}
-          cx={d.cx}
-          cy={d.cy}
-          r={d.r}
-          fill="currentColor"
-          className="text-teal-600 dark:text-teal-400"
-          style={{
-            "--start-opacity": d.opacity.toString(),
-            "--end-opacity": (d.opacity * 0.4).toString(),
-            animation: `pulseDot 3s ease-in-out ${d.delay}s infinite`,
-          } as React.CSSProperties}
-        />
-      ))}
-    </svg>
-  );
-}
-
-function ProjectCard({
-  slug,
-  title,
-  description,
-  tags,
-}: {
-  slug: string;
-  title: string;
-  description: string;
-  tags: string[];
-}) {
-  return (
-    <Link
-      href={`/projects/${slug}`}
-      className="group block bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-6 hover:border-teal-500 dark:hover:border-teal-400 hover:shadow-lg transition-all duration-300"
-    >
-      {/* Placeholder image area */}
-      <div className="aspect-video bg-slate-100 dark:bg-slate-800 rounded mb-4 flex items-center justify-center">
-        <span className="text-3xl text-slate-400 dark:text-slate-600 group-hover:text-teal-500 dark:group-hover:text-teal-400 transition-colors">
-          →
-        </span>
-      </div>
-      <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
-        {title}
-      </h3>
-      <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
-        {description}
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {tags.map((tag) => (
-          <span
-            key={tag}
-            className="text-xs px-2 py-0.5 rameunded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
-          >
-            {tag}
-          </span>
-        ))}
-      </div>
-    </Link>
+        <div className="flex flex-wrap justify-between items-center gap-4 pt-[22px] px-0.5">
+          <a href={`mailto:${EMAIL}`} className="text-xl font-medium text-(--h-ink) break-all">{EMAIL}</a>
+          <div className="flex flex-wrap gap-5 text-[15px]">
+            <a href="https://github.com/marazaqkhan" target="_blank" rel="noopener noreferrer" className="text-(--h-muted) hover:text-(--h-ink)">GitHub</a>
+            <a href="https://www.linkedin.com/in/razaqkhanma" target="_blank" rel="noopener noreferrer" className="text-(--h-muted) hover:text-(--h-ink)">LinkedIn</a>
+            <Link href="/projects" className="text-(--h-muted) hover:text-(--h-ink)">All projects</Link>
+          </div>
+        </div>
+        <p className="mt-7 mx-0.5 mb-0 font-mono text-xs leading-relaxed text-(--h-muted)">
+          I reply to every email. Especially about field robots, navigation and getting hardware out of the lab.
+        </p>
+      </footer>
+    </main>
   );
 }

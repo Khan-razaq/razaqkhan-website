@@ -27,6 +27,36 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Home page palette: warm paper with a faint engineering grid; dark mode swaps it. */
+.home {
+  --h-bg: #f6f3ec;
+  --h-ink: #1c1d1a;
+  --h-muted: #5c5b55;
+  --h-line: #e2ded3;
+  --h-line2: #c9c4b6;
+  --h-card: #fbf9f4;
+  --h-band: #efebe1;
+  --h-grid: rgba(28, 29, 26, 0.045);
+  --h-accent: #0f6e56;
+  background-color: var(--h-bg);
+  color: var(--h-ink);
+  background-image:
+    linear-gradient(var(--h-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--h-grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+.dark .home {
+  --h-bg: #141513;
+  --h-ink: #eeece6;
+  --h-muted: #a9a79f;
+  --h-line: #2e2f2b;
+  --h-line2: #4a4b46;
+  --h-card: #1b1c1a;
+  --h-band: #191a18;
+  --h-grid: rgba(255, 255, 255, 0.035);
+  --h-accent: #5dcaa5;
+}
+
 /* The theme icon turning in when it changes (ThemeToggle). */
 @keyframes theme-icon-in {
   from {
