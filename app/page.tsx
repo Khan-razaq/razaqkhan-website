@@ -83,10 +83,8 @@ export default function HomePage() {
       <header id="top" className={`${wrap} pt-2 lg:pt-4`}>
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-16 lg:items-center">
           <div className="min-w-0">
-            <div className="rounded-2xl overflow-hidden border border-(--h-line)">
-              <HeroScene />
-            </div>
-            <p className="mt-2.5 mx-0.5 mb-0 font-mono text-xs text-(--h-muted)">
+            <HeroScene />
+            <p className="mt-1 mx-0.5 mb-0 font-mono text-xs text-(--h-muted)">
               Tap the sun for the time · pull it back and let go · hit a cloud or the tree · tap the name
             </p>
           </div>
