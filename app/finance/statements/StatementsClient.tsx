@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import ThemeToggle from "@/app/ThemeToggle";
 import { readStatementCsv, type StatementRow } from "@/lib/finance/statementCsv";
 import type { CheckResult } from "@/lib/finance/statementMatch";
 import { addMissingToInbox, runStatementCheck } from "./actions";
@@ -75,7 +76,10 @@ export default function StatementsClient({ targets, checks }: { targets: Target[
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-950 p-4 sm:p-6 md:p-12">
       <div className="max-w-2xl mx-auto space-y-4">
-        <header>
+        <header className="relative">
+          <div className="absolute right-0 top-0">
+            <ThemeToggle />
+          </div>
           <Link
             href="/finance/inbox"
             className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"

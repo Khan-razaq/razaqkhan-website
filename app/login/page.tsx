@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import ThemeToggle from "@/app/ThemeToggle";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -37,7 +38,10 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-6">
+    <main className="relative min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-6">
+      <div className="absolute right-6 top-6">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-sm">
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6">
           <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-1">

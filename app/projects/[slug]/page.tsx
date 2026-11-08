@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import ThemeToggle from "@/app/ThemeToggle";
 import { notFound } from "next/navigation";
 import { projects } from "@/lib/projects";
 
@@ -42,12 +43,15 @@ export default async function ProjectPage({
         >
           ← All projects
         </Link>
-        <Link
-          href="/"
-          className="text-sm text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
-        >
-          Razaq Khan
-        </Link>
+        <div className="flex items-center gap-5">
+          <Link
+            href="/"
+            className="text-sm text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
+          >
+            Razaq Khan
+          </Link>
+          <ThemeToggle />
+        </div>
       </nav>
 
       <article className="max-w-4xl mx-auto px-6 md:px-12 pt-8 pb-24">
