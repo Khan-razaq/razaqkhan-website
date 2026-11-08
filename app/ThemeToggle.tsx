@@ -2,9 +2,16 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 
+// "on" is dark, "off" is light (the values layout.tsx reads on load).
 type Theme = "auto" | "on" | "off";
 
 const noopSubscribe = () => () => {};
+
+// One round icon: tap to go Auto → Light → Dark. The icon shows the current
+// mode; the ring is drawn in the text color so it stands out on either
+// background.
+const NEXT: Record<Theme, Theme> = { auto: "off", off: "on", on: "auto" };
+const NAME: Record<Theme, string> = { auto: "Auto (matches your device)", off: "Light", on: "Dark" };
 
 export default function ThemeToggle() {
   // false during server render and hydration, true once running in the browser
@@ -40,71 +47,44 @@ export default function ThemeToggle() {
   }, [theme, mounted]);
 
   if (!mounted) {
-    return <div className="h-[68px] w-[260px]" />;
+    return <div className="h-8 w-8" />;
   }
 
-  const positionMap: Record<Theme, number> = { on: 0, auto: 1, off: 2 };
-  const position = positionMap[theme];
-
   return (
-    <div className="inline-flex flex-col items-center gap-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2.5">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">
-        Dark Mode
-      </span>
-
-      <div className="flex items-center gap-2">
-        {/* ON label */}
-        <button
-          onClick={() => setTheme("on")}
-          className="text-[10px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 cursor-pointer transition-colors"
-        >
-          On
-        </button>
-
-        {/* Track + Auto label */}
-        <div className="relative">
-          {/* AUTO label centered above track */}
-          <button
-            onClick={() => setTheme("auto")}
-            className="absolute -top-3 left-1/2 -translate-x-1/2 text-[8px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 cursor-pointer transition-colors"
-          >
-            Auto
-          </button>
-
-          {/* Track (gray base) */}
-          <div className="relative w-[120px] h-6 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-            {/* Green fill — animates between left half and right half */}
-            <div
-              className="absolute top-0 h-full bg-green-500 transition-all duration-200 ease-out"
-              style={{
-                left: position === 0 ? "0%" : position === 1 ? "50%" : "50%",
-                width: position === 1 ? "0%" : "50%",
-              }}
-            />
-
-            {/* Knob */}
-            <div
-              className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-md transition-all duration-200 ease-out z-10"
-              style={{
-                left:
-                  position === 0
-                    ? "2px"
-                    : position === 1
-                    ? "calc(50% - 10px)"
-                    : "calc(100% - 22px)",
-              }}
-            />
-          </div>
-        </div>
-
-        {/* OFF label */}
-        <button
-          onClick={() => setTheme("off")}
-          className="text-[10px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 cursor-pointer transition-colors"
-        >
-          Off
-        </button>
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={() => setTheme(NEXT[theme])}
+      aria-label={`Theme: ${NAME[theme]}. Tap to change.`}
+      title={`Theme: ${NAME[theme]}`}
+      className="h-8 w-8 shrink-0 inline-flex items-center justify-center rounded-full border-[1.5px] border-gray-900 dark:border-gray-100 text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-95 cursor-pointer transition-[background-color,transform] duration-150"
+    >
+      <svg
+        key={theme}
+        viewBox="0 0 24 24"
+        width="16"
+        height="16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        className="animate-[theme-icon-in_200ms_ease-out]"
+      >
+        {theme === "auto" && (
+          <>
+            <circle cx="12" cy="12" r="8" />
+            <path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" />
+          </>
+        )}
+        {theme === "off" && (
+          <>
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+          </>
+        )}
+        {theme === "on" && <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" />}
+      </svg>
+    </button>
   );
 }
