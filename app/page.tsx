@@ -80,27 +80,33 @@ export default function LandingPage() {
           animation: sweep 6s linear infinite;
           transform-origin: 200px 200px;
         }
+        @media (prefers-reduced-motion: reduce) {
+          .bg-drift, .bg-drift-diagonal, .bg-breathe, .star-layer { animation: none; }
+        }
       `}</style>
 
       {/* Starlight (dark mode only) */}
       <Starlight />
 
-      {/* Background accent — drifts gently */}
+      {/* Background glows. Soft radial gradients rather than blurred
+          circles: they look the same, but a blur has to be redrawn as it
+          moves, which made phones stutter. */}
+      {/* Accent — drifts gently */}
       <div
         aria-hidden="true"
-        className="absolute -top-32 -right-32 w-[700px] h-[700px] rounded-full bg-teal-500/15 dark:bg-teal-400/8 blur-3xl pointer-events-none bg-drift"
+        className="absolute -top-32 -right-32 w-[700px] h-[700px] rounded-full bg-[radial-gradient(closest-side,rgb(20_184_166/0.16),rgb(20_184_166/0.06)_60%,transparent)] dark:bg-[radial-gradient(closest-side,rgb(45_212_191/0.09),rgb(45_212_191/0.03)_60%,transparent)] pointer-events-none bg-drift will-change-transform"
       />
 
       {/* Light-mode-only cloud: lower-left, drifts diagonally */}
       <div
         aria-hidden="true"
-        className="absolute -bottom-40 -left-40 w-[600px] h-[600px] rounded-full bg-teal-400/12 dark:bg-transparent blur-3xl pointer-events-none bg-drift-diagonal"
+        className="dark:hidden absolute -bottom-40 -left-40 w-[600px] h-[600px] rounded-full bg-[radial-gradient(closest-side,rgb(45_212_191/0.13),rgb(45_212_191/0.05)_60%,transparent)] pointer-events-none bg-drift-diagonal will-change-transform"
       />
 
       {/* Light-mode-only cloud: middle-right, breathes in place */}
       <div
         aria-hidden="true"
-        className="absolute top-1/3 -right-20 w-[400px] h-[400px] rounded-full bg-cyan-300/10 dark:bg-transparent blur-3xl pointer-events-none bg-breathe"
+        className="dark:hidden absolute top-1/3 -right-20 w-[400px] h-[400px] rounded-full bg-[radial-gradient(closest-side,rgb(103_232_249/0.12),rgb(103_232_249/0.04)_60%,transparent)] pointer-events-none bg-breathe will-change-transform"
       />
 
       {/* Top nav — photo, hadith, projects link */}
@@ -250,6 +256,12 @@ export default function LandingPage() {
   );
 }
 
+const STAR_LAYERS = [
+  { duration: 4, delay: 0 },
+  { duration: 5.5, delay: 1.3 },
+  { duration: 7, delay: 2.6 },
+];
+
 function Starlight() {
   // Static twinkling stars (unchanged)
   const stars = Array.from({ length: 120 }, (_, i) => {
@@ -257,10 +269,8 @@ function Starlight() {
     const x = ((seed * 13) % 1000) / 10;
     const y = ((seed * 23) % 1000) / 10;
     const size = 1 + ((seed * 7) % 30) / 30;
-    const duration = 3 + ((seed * 11) % 50) / 10;
-    const delay = ((seed * 19) % 100) / 10;
     const opacity = 0.3 + ((seed * 5) % 70) / 100;
-    return { x, y, size, duration, delay, opacity };
+    return { x, y, size, opacity };
   });
 
   // State to hold currently-active meteors
@@ -329,23 +339,33 @@ function Starlight() {
   return (
     <div
       aria-hidden="true"
-      className="fixed inset-0 pointer-events-none opacity-0 dark:opacity-100 transition-opacity duration-1000 z-0 overflow-hidden"
+      className="hidden dark:block fixed inset-0 pointer-events-none z-0 overflow-hidden"
     >
-      {/* Static twinkling stars */}
-      {stars.map((s, i) => (
+      {/* Twinkling stars: each third of them twinkles together, on its own
+          rhythm (three animations rather than one per star) */}
+      {STAR_LAYERS.map((layer, g) => (
         <div
-          key={i}
-          className="absolute bg-white rounded-full"
-          style={{
-            left: `${s.x}%`,
-            top: `${s.y}%`,
-            width: `${s.size}px`,
-            height: `${s.size}px`,
-            animation: `twinkle ${s.duration}s ease-in-out ${s.delay}s infinite`,
-            opacity: s.opacity,
-            boxShadow: `0 0 ${s.size * 2}px rgba(255, 255, 255, 0.5)`,
-          }}
-        />
+          key={g}
+          className="star-layer absolute inset-0 will-change-[opacity]"
+          style={{ animation: `twinkle ${layer.duration}s ease-in-out ${layer.delay}s infinite` }}
+        >
+          {stars
+            .filter((_, i) => i % STAR_LAYERS.length === g)
+            .map((s, i) => (
+              <div
+                key={i}
+                className="absolute bg-white rounded-full"
+                style={{
+                  left: `${s.x}%`,
+                  top: `${s.y}%`,
+                  width: `${s.size}px`,
+                  height: `${s.size}px`,
+                  opacity: s.opacity,
+                  boxShadow: `0 0 ${s.size * 2}px rgba(255, 255, 255, 0.5)`,
+                }}
+              />
+            ))}
+        </div>
       ))}
 
       {/* Active meteors */}
