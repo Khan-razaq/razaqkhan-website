@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ThemeToggle from "@/app/ThemeToggle";
 import { projects } from "@/lib/projects";
 
 
@@ -25,12 +26,15 @@ export default function ProjectsPage() {
           ← Razaq Khan
         </Link>
         
-        <a  href="/razaq-khan-resume.pdf"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-sm text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors">
-          Resume
-        </a>
+        <div className="flex items-center gap-5">
+          <a href="/razaq-khan-resume.pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors">
+            Resume
+          </a>
+          <ThemeToggle />
+        </div>
       </nav>
 
       <section className="max-w-5xl mx-auto px-6 md:px-12 pt-12 pb-24">

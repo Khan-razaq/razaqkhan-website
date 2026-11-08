@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import ThemeToggle from "@/app/ThemeToggle";
 import { Mail } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -137,6 +138,7 @@ export default function LandingPage() {
             className="text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors">
             Projects
           </Link>
+          <ThemeToggle />
         </div>
       </nav>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import ThemeToggle from "@/app/ThemeToggle";
 import Link from "next/link";
 import { addCompany } from "../actions";
 
@@ -39,7 +40,10 @@ export default function AddCompany({
   }, [nothingShared, url, title, text, closeWhenDone]);
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-6">
+    <main className="relative min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-6">
+      <div className="absolute right-6 top-6">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6 text-center">
         {state.kind === "saving" && <p className="text-sm text-gray-600 dark:text-gray-400">Saving…</p>}
         {state.kind === "saved" && (
