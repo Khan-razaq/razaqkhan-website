@@ -55,36 +55,39 @@ export function screenshotBank(text: string): Bank | null {
   return null;
 }
 
-function headingDate(m: RegExpMatchArray, takenAt: Date): string {
-  const day = new Date(takenAt);
+// A list heading's date. `today` is the date where the screenshot was taken
+// (YYYY-MM-DD), not on the server's clock: "Today" at 9 PM in Boston is
+// already tomorrow in UTC.
+function headingDate(m: RegExpMatchArray, today: string): string {
+  const [ty, tm, td] = today.split("-").map(Number);
+  let day: Date;
   if (m[1]) {
-    if (m[1].toLowerCase() === "yesterday") day.setDate(day.getDate() - 1);
+    day = new Date(Date.UTC(ty, tm - 1, td - (m[1].toLowerCase() === "yesterday" ? 1 : 0)));
   } else {
     const month = MONTHS.indexOf(m[2].toLowerCase());
-    let year = m[4] ? Number(m[4]) : takenAt.getFullYear();
+    let year = m[4] ? Number(m[4]) : ty;
     // "Dec 30" in a screenshot taken in January is last year.
-    if (!m[4] && month > takenAt.getMonth()) year -= 1;
-    day.setFullYear(year, month, Number(m[3]));
+    if (!m[4] && month > tm - 1) year -= 1;
+    day = new Date(Date.UTC(year, month, Number(m[3])));
   }
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`;
+  return day.toISOString().slice(0, 10);
 }
 
 // The purchases in a transaction-list screenshot, or [] when the screen
 // isn't one (no date headings with amounts under them).
-export function readTransactionList(text: string, takenAt: Date): ScreenshotItem[] {
-  return scanList(text, takenAt).items;
+export function readTransactionList(text: string, today: string): ScreenshotItem[] {
+  return scanList(text, today).items;
 }
 
 // Purchases above the first date heading: the list was scrolled so their
 // date is off the top of the screen. Their date can't be known, so they're
 // left out, and the phone says so.
-export function undatedAtTop(text: string, takenAt: Date): number {
-  const { items, undated } = scanList(text, takenAt);
+export function undatedAtTop(text: string, today: string): number {
+  const { items, undated } = scanList(text, today);
   return items.length ? undated : 0;
 }
 
-function scanList(text: string, takenAt: Date): { items: ScreenshotItem[]; undated: number } {
+function scanList(text: string, today: string): { items: ScreenshotItem[]; undated: number } {
   const items: ScreenshotItem[] = [];
   let undated = 0;
   let date: string | null = null;
@@ -96,7 +99,7 @@ function scanList(text: string, takenAt: Date): { items: ScreenshotItem[]; undat
 
     const heading = line.match(DATE_HEADING);
     if (heading) {
-      date = headingDate(heading, takenAt);
+      date = headingDate(heading, today);
       name = [];
       continue;
     }

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { requestTimeZone } from "@/lib/timeZone";
 import { createClient } from "@/lib/supabase/server";
 import { readNewAlerts } from "@/lib/finance/inbox";
 import { friendBalances } from "@/lib/finance/friends";
@@ -42,7 +44,7 @@ export default async function InboxPage() {
   }
 
   // Read any alert emails the Gmail script dropped off since last time.
-  await readNewAlerts(supabase);
+  await readNewAlerts(supabase, requestTimeZone(await headers()));
 
   const [alertsResult, cardsResult, accountsResult, keysResult, spentByResult, paidBackResult, checksResult] = await Promise.all([
     supabase
