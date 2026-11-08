@@ -49,7 +49,7 @@ export const projects: Project[] = [
 
     visuals: [],
 
-    githubUrl: "https://github.com/Khan-razaq/razaqkhan-website",
+    githubUrl: "https://github.com/marazaqkhan/razaqkhan-website",
   },
 
   {
